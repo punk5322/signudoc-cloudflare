@@ -44,13 +44,14 @@ The database tables are created, and later updated, each time the container star
 
 ### Settings
 
-Every variable and secret on the Worker reaches the app as an environment variable, so any setting in [`.env.example`](../.env.example) can be set with `npx wrangler secret put <NAME>`. Three are worth knowing:
+Every variable and secret on the Worker reaches the app as an environment variable, so any setting in [`.env.example`](../.env.example) can be set with `npx wrangler secret put <NAME>`. Four are worth knowing:
 
 | Setting                | What it does                                                                                                                             |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `APP_URL`              | The site's public address. Unset, it is the address the site was first opened at. Set it when you move the site to a domain of your own. |
 | `SETUP_TOKEN`          | A secret the first-run setup page asks for.                                                                                              |
 | `RETENTION_JOB_SECRET` | Closes the daily cleanup route to everyone but the Worker.                                                                               |
+| `ANTHROPIC_API_KEY`    | Turns on "Place fields with AI" when preparing an envelope. The draft's PDF is sent to Anthropic's API. Unset, the button is disabled.   |
 
 ### A domain of your own
 

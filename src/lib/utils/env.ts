@@ -266,6 +266,10 @@ export function getEnv(env: EnvSource = process.env) {
   return {
     databaseUrl: resolveDatabaseUrl(env),
     appUrl: resolveAppUrl(env),
+    ai: {
+      // Turns on "Place fields with AI" in the field editor.
+      anthropicApiKey: readEnv(env, "ANTHROPIC_API_KEY"),
+    },
     auth: {
       betterAuthSecret: resolveAuthSecret(env),
       betterAuthUrl: resolveAuthUrl(env),

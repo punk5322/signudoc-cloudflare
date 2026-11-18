@@ -4,6 +4,7 @@ import { PrepareLiveShell } from "@/components/envelopes/prepare-live-shell";
 import { getAuthSession } from "@/lib/auth/server";
 import { getDb } from "@/lib/db/connection";
 import { getPrepareEnvelopeDataForUser } from "@/lib/envelopes";
+import { hasEnv } from "@/lib/utils/env";
 
 type PrepareEnvelopePageProps = {
   params: Promise<{
@@ -45,6 +46,7 @@ export default async function PrepareEnvelopePage({
 
   return (
     <PrepareLiveShell
+      aiFieldsEnabled={hasEnv("ANTHROPIC_API_KEY")}
       envelopeId={id}
       initialState={initialState}
       key={id}
