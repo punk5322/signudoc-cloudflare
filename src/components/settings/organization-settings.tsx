@@ -5,6 +5,7 @@ import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 
 import { FieldShell, ShellButton } from "@/components/shared/form-shell";
 import { BrandingPanel } from "@/components/settings/branding-panel";
+import { IntegrationsPanel } from "@/components/settings/integrations-panel";
 import { Part11Panel } from "@/components/settings/part11-panel";
 import { PeoplePanel } from "@/components/settings/people-panel";
 import { SecurityPanel } from "@/components/settings/security-panel";
@@ -412,6 +413,8 @@ export function OrganizationSettings({
         {!values.hosted ? (
           <Part11Panel initialEnabled={values.part11Mode} />
         ) : null}
+
+        {!values.hosted ? <IntegrationsPanel /> : null}
 
         <SignerDataPanel />
       </div>

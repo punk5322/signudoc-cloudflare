@@ -11,6 +11,7 @@ import {
   queryMany,
   withTransaction,
 } from "../db/connection.ts";
+import { enqueueEnvelopeEvent } from "../integrations/queue.ts";
 import { logAuditRecord } from "../security/logging.ts";
 import { canonicalJson } from "../utils/canonical-json.ts";
 
@@ -253,6 +254,12 @@ async function insertChainedAuditEvent(
       previousHash,
       rowHash,
     ],
+  );
+
+  // Webhooks and Drive filing, queued with the event so neither is lost.
+  await enqueueEnvelopeEvent(
+    { auditEventId: id, envelopeId: input.envelopeId, event: input.event },
+    database,
   );
 
   afterCommit(database, () => {

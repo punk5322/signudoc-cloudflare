@@ -24,6 +24,9 @@ const EVENT_LABELS: Record<SystemAuditEvent["event"], string> = {
   account_closure_requested: "Account closure requested",
   account_deleted: "Account deleted",
   email_domain_changed: "Email domain changed",
+  google_drive_connected: "Google Drive connected",
+  google_drive_disconnected: "Google Drive disconnected",
+  google_drive_folder_changed: "Google Drive folder changed",
   identity_verification_revoked: "Identity confirmation taken back",
   identity_verified: "Identity confirmed",
   logo_changed: "Logo changed",
@@ -45,6 +48,8 @@ const EVENT_LABELS: Record<SystemAuditEvent["event"], string> = {
   two_factor_enabled: "Two-step sign-in turned on",
   two_factor_requirement_changed: "Two-step sign-in requirement changed",
   two_factor_reset: "Two-step sign-in reset by an administrator",
+  webhook_endpoint_added: "Webhook added",
+  webhook_endpoint_removed: "Webhook removed",
 };
 
 const SIGN_IN_FAILURE_REASONS: Record<string, string> = {
@@ -94,6 +99,12 @@ function describeEvent(event: SystemAuditEvent): string {
       return metadata.action === "removed" ? "Removed" : "Replaced";
     case "email_domain_changed":
       return typeof metadata.domain === "string" ? metadata.domain : "";
+    case "webhook_endpoint_added":
+    case "webhook_endpoint_removed":
+      return typeof metadata.host === "string" ? metadata.host : "";
+    case "google_drive_connected":
+    case "google_drive_folder_changed":
+      return typeof metadata.folderName === "string" ? metadata.folderName : "";
     default:
       return target ?? "";
   }

@@ -6,6 +6,10 @@ import {
   runEnvelopeSchedule,
   type EnvelopeScheduleSummary,
 } from "./envelope-schedule.ts";
+import {
+  processDueDeliveries,
+  pruneDeliveries,
+} from "./integrations/deliveries.ts";
 import { runRetentionSweep, type RetentionSweepSummary } from "./retention.ts";
 import {
   consumeRateLimit,
@@ -191,6 +195,17 @@ export async function runRetentionJob({
         stoppedEarly: false,
       };
     });
+
+    // Webhook and Drive deliveries still waiting for a retry, for when the
+    // app slept through their time. A failure here is the queue's own to
+    // record and retry, not the cleanup's.
+    await processDueDeliveries(database)
+      .then(() => pruneDeliveries(database))
+      .catch((error: unknown) => {
+        if (!isMissingSchemaError(error)) {
+          console.error("The delivery queue failed:", error);
+        }
+      });
 
     return { schedule, status: "ran", summary };
   } finally {

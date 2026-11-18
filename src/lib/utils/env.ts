@@ -275,6 +275,11 @@ export function getEnv(env: EnvSource = process.env) {
       senderAddress: readEnv(env, "RESEND_FROM_EMAIL"),
       supportAddress: readEnv(env, "SUPPORT_EMAIL"),
     },
+    // An OAuth client for filing finished envelopes in Google Drive.
+    google: {
+      clientId: readEnv(env, "GOOGLE_CLIENT_ID"),
+      clientSecret: readEnv(env, "GOOGLE_CLIENT_SECRET"),
+    },
     internal: {
       // Vercel sends this as a bearer token on cron calls when it is set.
       cronSecret: readEnv(env, "CRON_SECRET"),

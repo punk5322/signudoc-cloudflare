@@ -42,6 +42,11 @@ export const systemAuditEventTypes = [
   "two_factor_requirement_changed",
   "logo_changed",
   "email_domain_changed",
+  "webhook_endpoint_added",
+  "webhook_endpoint_removed",
+  "google_drive_connected",
+  "google_drive_disconnected",
+  "google_drive_folder_changed",
 ] as const;
 
 export type SystemAuditEventType = (typeof systemAuditEventTypes)[number];
