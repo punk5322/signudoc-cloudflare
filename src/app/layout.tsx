@@ -1,17 +1,10 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import "allo-font";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { NEUTRAL_PRODUCT_NAME } from "@/lib/branding";
 
 import "./globals.css";
-
-const plusJakartaSans = Plus_Jakarta_Sans({
-  display: "swap",
-  subsets: ["latin"],
-  variable: "--font-ui",
-  weight: ["400", "500", "600", "700", "800"],
-});
 
 export const metadata: Metadata = {
   title: NEUTRAL_PRODUCT_NAME,
@@ -29,7 +22,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${plusJakartaSans.variable} antialiased`}>
+      <body className="antialiased">
         <TooltipProvider>{children}</TooltipProvider>
       </body>
     </html>

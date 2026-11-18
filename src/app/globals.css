@@ -119,8 +119,7 @@
     min-height: 100vh;
     background: var(--page);
     color: var(--fg);
-    font-family:
-      var(--font-ui), "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+    font-family: "Allo", system-ui, sans-serif;
     letter-spacing: -0.005em;
     text-rendering: optimizeLegibility;
   }
