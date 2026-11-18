@@ -139,6 +139,8 @@ export class SignuDocApp extends DurableObject {
     const gatewayToken = await this.gatewayToken();
 
     return {
+      // The deployed version, so a deploy (a new image) restarts the app.
+      APP_BUILD: this.env.CF_VERSION_METADATA?.id ?? "",
       // The address the site was first opened at. Set APP_URL on the
       // Worker to use another, such as a domain of your own.
       APP_URL: (await this.ctx.storage.get("appUrl")) ?? "",
