@@ -38,6 +38,7 @@ export const fieldTypes = [
   "signature",
   "initials",
   "date",
+  "name",
   "text",
   "checkbox",
   "number",
@@ -64,6 +65,8 @@ export const auditEventTypes = [
   "expired",
   "reminded_auto",
   "reauthentication_failed",
+  "copied",
+  "signer_corrected",
 ] as const;
 
 /**

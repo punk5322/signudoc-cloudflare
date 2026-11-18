@@ -374,3 +374,57 @@ test("signers saved for a draft do not land on an envelope that was sent meanwhi
     [draft.rileyEmail, draft.caseyEmail],
   );
 });
+
+test("sending with no email provider is refused as a setup state and leaves the draft as it was (issue #53)", async () => {
+  const draft = await createDraft();
+  const driverBefore = process.env.EMAIL_DRIVER;
+  const keyBefore = process.env.RESEND_API_KEY;
+
+  delete process.env.EMAIL_DRIVER;
+  delete process.env.RESEND_API_KEY;
+
+  try {
+    await assert.rejects(
+      sendDraftEnvelope(
+        draft.userId,
+        draft.envelopeId,
+        { senderEmail: "sam@example.test", senderName: "Sam Sender" },
+        { database },
+      ),
+      (error) => {
+        assert.ok(error instanceof EnvelopeMutationError);
+        assert.equal(error.statusCode, 503);
+        assert.match(error.message, /Email is not set up yet/);
+        assert.match(error.message, /Settings, Organization/);
+        return true;
+      },
+    );
+  } finally {
+    process.env.EMAIL_DRIVER = driverBefore;
+
+    if (keyBefore === undefined) {
+      delete process.env.RESEND_API_KEY;
+    } else {
+      process.env.RESEND_API_KEY = keyBefore;
+    }
+  }
+
+  assert.equal(await statusOf(draft.envelopeId), "draft");
+
+  const { rows: signers } = await database.query<{
+    signing_token_hash: string | null;
+    status: string;
+  }>(`select status, signing_token_hash from signers where envelope_id = $1`, [
+    draft.envelopeId,
+  ]);
+
+  assert.ok(signers.every((signer) => signer.status === "pending"));
+  assert.ok(signers.every((signer) => signer.signing_token_hash === null));
+
+  const { rows: sent } = await database.query(
+    `select 1 from audit_events where envelope_id = $1 and event = 'sent'`,
+    [draft.envelopeId],
+  );
+
+  assert.equal(sent.length, 0);
+});

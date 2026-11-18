@@ -41,13 +41,13 @@ Short templates for the procedures Part 11 expects you to have. Put each into yo
 ## SOP-5 Audit trail review and records (11.10(c), (e))
 
 1. Every `[month]`, an administrator:
-   - opens Settings, Part 11 and confirms the site audit trail chain is intact;
+   - opens Settings, Organization, Sign-in security and confirms the site audit trail chain is intact;
    - downloads the site audit trail CSV for the period and files it in `[location]`;
    - looks for unexpected settings changes, role changes, Part 11 mode changes, identity changes and locks.
 2. For each finished regulated record, the sender files the signed PDF, the certificate and the envelope's audit trail CSV in `[the record system]` within `[N]` days.
 3. If a chain check ever shows broken, stop using the install for new records and handle it as an incident.
 4. Records are kept for `[the period your predicate rules require]`. They are deleted only by hand, under `[procedure]`, after that period, with the deletion recorded.
-5. Backups of the database and of the Blob store are taken `[how and how often]` and a restore is tested `[how often]`.
+5. Backups of the database and of the Blob store are taken `[daily, by the built-in backup (docs/backup-and-restore.md), or how]` and a restore is tested `[how often]`.
 
 ## SOP-6 Incidents
 

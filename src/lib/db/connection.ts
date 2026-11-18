@@ -78,18 +78,52 @@ export function replaceDbPoolForTests(pool: Pool): Pool | null {
   return replaced;
 }
 
+// Work to do once a transaction has committed, such as writing a log line
+// about a row it inserted: a line about a row that was rolled back would
+// describe something that never happened.
+const commitCallbacks = new WeakMap<object, (() => void)[]>();
+
+/**
+ * Runs `callback` once the transaction `database` belongs to has committed,
+ * or at once when `database` is not inside one. Dropped on rollback.
+ */
+export function afterCommit(database: DbExecutor, callback: () => void): void {
+  const pending = commitCallbacks.get(database);
+
+  if (pending) {
+    pending.push(callback);
+    return;
+  }
+
+  callback();
+}
+
 export async function withTransaction<T>(
   run: (client: PoolClient) => Promise<T>,
   pool: Pool = getDb(),
 ): Promise<T> {
   const client = await pool.connect();
+  const pending: (() => void)[] = [];
+
+  commitCallbacks.set(client, pending);
 
   try {
     await client.query("BEGIN");
     const result = await run(client);
     await client.query("COMMIT");
+    commitCallbacks.delete(client);
+
+    for (const callback of pending) {
+      try {
+        callback();
+      } catch (error) {
+        console.error("[db] A step after commit failed:", error);
+      }
+    }
+
     return result;
   } catch (error) {
+    commitCallbacks.delete(client);
     await client.query("ROLLBACK");
     throw error;
   } finally {

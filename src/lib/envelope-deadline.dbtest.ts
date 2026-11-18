@@ -254,7 +254,7 @@ test("a reminder is refused once the deadline has passed", async () => {
       userId,
       envelopeId,
       { senderEmail: "sam@example.test", senderName: "Sam Sender" },
-      { database },
+      { database, emailService: recordingEmailService().service },
     ),
     (error: unknown) => {
       assert.ok(error instanceof ReminderMutationError);
@@ -794,4 +794,58 @@ test("a change of deadline and a decline do not lock each other out", async () =
 
     await rm(envelope.storageDir, { force: true, recursive: true });
   }
+});
+
+test("a reminder with no email provider is refused before the signer's link is replaced (issue #53)", async () => {
+  const { envelopeId, signerId, userId } = await createSentEnvelope({
+    expiresAt: unixNow() + DAY,
+  });
+  const before = await database.query<{ signing_token_hash: string }>(
+    `select signing_token_hash from signers where id = $1`,
+    [signerId],
+  );
+  const driverBefore = process.env.EMAIL_DRIVER;
+  const keyBefore = process.env.RESEND_API_KEY;
+
+  delete process.env.EMAIL_DRIVER;
+  delete process.env.RESEND_API_KEY;
+
+  try {
+    await assert.rejects(
+      sendManualEnvelopeNudge(
+        userId,
+        envelopeId,
+        { senderEmail: "sam@example.test", senderName: "Sam Sender" },
+        { database },
+      ),
+      (error: unknown) => {
+        assert.ok(error instanceof ReminderMutationError);
+        assert.equal(error.statusCode, 503);
+        assert.match(error.message, /Email is not set up yet/);
+        return true;
+      },
+    );
+  } finally {
+    for (const [name, value] of [
+      ["EMAIL_DRIVER", driverBefore],
+      ["RESEND_API_KEY", keyBefore],
+    ] as const) {
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
+    }
+  }
+
+  const after = await database.query<{ signing_token_hash: string }>(
+    `select signing_token_hash from signers where id = $1`,
+    [signerId],
+  );
+
+  assert.equal(
+    after.rows[0]?.signing_token_hash,
+    before.rows[0]?.signing_token_hash,
+  );
+  assert.deepEqual(await auditEvents(envelopeId), []);
 });

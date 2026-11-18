@@ -487,9 +487,11 @@ function SetupForm({
               autoComplete="new-password"
               disabled={isSubmitting}
               error={errors.password}
-              helper="At least 15 characters. Let your password manager make one."
+              helper="15 to 128 characters. Let your password manager make one."
               label="Password"
-              maxLength={128}
+              // No maxLength: the browser would cut a longer password short
+              // without a word, and the account would get a password other
+              // than the one typed. Setup refuses one over 128 instead.
               minLength={15}
               name="setup-password"
               passwordRules="minlength: 20; maxlength: 64; required: lower; required: upper; required: digit; allowed: [-_.!@#$%^&*];"

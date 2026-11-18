@@ -147,3 +147,64 @@ test("without a subsetter whole Latin fonts are embedded and CJK is left out", a
   assert.ok(text.includes("Łukasz"));
   assert.ok(!text.includes("山田"));
 });
+
+async function readSignatureLines(
+  pdfBytes: Uint8Array,
+): Promise<{ str: string; width: number }[]> {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const document = await pdfjs.getDocument({
+    data: new Uint8Array(pdfBytes),
+    useSystemFonts: false,
+    verbosity: 0,
+  }).promise;
+  const content = await (await document.getPage(1)).getTextContent();
+  const items = (content.items as { str?: string; width?: number }[])
+    .filter((item) => item.str)
+    .map((item) => ({ str: item.str!, width: item.width ?? 0 }));
+
+  await document.destroy();
+
+  return items;
+}
+
+test("typed signatures drawn with ligatures read back whole and keep their widths (issues #58, #59)", async () => {
+  // Great Vibes draws "Pr", "or", "en" and "th" as one glyph each. Those
+  // glyphs used to be missing from the font's ToUnicode map and /W widths.
+  const names = [
+    "Priya Patel",
+    "Jordan Lee",
+    "Riley Recipient",
+    "John Smith",
+    "Diego Ruiz",
+  ];
+  const size = 30;
+  const pdfDocument = await PDFDocument.create();
+  const faces = await embedTextFaces(pdfDocument, names, { signature: true });
+  const page = pdfDocument.addPage([612, 500]);
+
+  names.forEach((name, index) => {
+    faces.signature.drawText(page, name, {
+      size,
+      x: 40,
+      y: 440 - index * 80,
+    });
+  });
+
+  const lines = await readSignatureLines(await pdfDocument.save());
+
+  assert.deepEqual(
+    lines.map((line) => line.str),
+    names,
+  );
+
+  for (const [index, name] of names.entries()) {
+    // The width a reader takes from the PDF is the width the name was laid
+    // out with. A missing width defaults to 1000, which showed as a gap.
+    assert.ok(
+      Math.abs(
+        lines[index]!.width - faces.signature.widthOfTextAtSize(name, size),
+      ) < 0.5,
+      `${name}: ${String(lines[index]!.width)} wide in the PDF, ${String(faces.signature.widthOfTextAtSize(name, size))} laid out`,
+    );
+  }
+});

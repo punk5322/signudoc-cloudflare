@@ -7,13 +7,17 @@ The person you are working for is called "the person" below.
 ## Before you start
 
 - The browser should already be signed in to the person's **Vercel** account and to the **GitHub** account Vercel will copy SignuDoc into. If a sign-in page appears, stop and ask the person to sign in. Never type a password, a one-time code or a passkey prompt for them unless they give you that job.
-- Everything here is free. Pick the **free plan** at every choice. If a screen asks for a card, a paid plan or an upgrade, stop and ask the person.
+- **Which Vercel plan.** Vercel's free Hobby plan is only for [personal, non-commercial use](https://vercel.com/docs/limits/fair-use-guidelines). Before you start, ask the person whether SignuDoc is for a company or other organization's work, or only for their own personal use.
+  - **Personal, non-commercial use:** the Hobby plan is fine.
+  - **An organization's work:** the Vercel account or team you deploy into belongs on **Vercel Pro**, $20 a month at the time of writing (see [What it costs](self-hosting.md#what-it-costs)). If it is not on Pro yet, tell the person and let them upgrade or approve the upgrade themselves. Never pay or upgrade without their say-so. If they decline, stop.
+- Neon, Resend and Vercel Blob: pick the **free plan** for each, whichever Vercel plan the person uses. If any other screen asks for a card, a paid plan or an upgrade, stop and ask the person.
 - Ask the person for these before you begin, so you are not stopped half way:
-  1. **The domain email should come from**, for example `acme.com`. SignuDoc suggests a `sign.` subdomain (`sign.acme.com`) so its email stays apart from the organization's own. If they have no domain yet, email can wait: leave Resend's domain question at its default.
-  2. **The organization's name**, as signers should see it.
-  3. **The support email address** signers and staff should write to for help.
-  4. **The administrator's name and email address.** The person creates the password themselves at step 6, or tells you to use their password manager.
-  5. **Whether they want to try email before their domain is verified.** If so, leave the sender address empty at step 6 (see step 7).
+  1. **Whether this is for an organization's work or for personal use**, to pick the Vercel plan (above).
+  2. **The domain email should come from**, for example `acme.com`. SignuDoc suggests a `sign.` subdomain (`sign.acme.com`) so its email stays apart from the organization's own. If they have no domain yet, email can wait: leave Resend's domain question at its default.
+  3. **The organization's name**, as signers should see it.
+  4. **The support email address** signers and staff should write to for help.
+  5. **The administrator's name and email address.** The person creates the password themselves at step 6, or tells you to use their password manager.
+  6. **Whether they want to try email before their domain is verified.** If so, leave the sender address empty at step 6 (see step 7).
 - Do one step at a time, and check each result on the page before you move on. Vercel changes its wording from time to time, so match screens by what they do, not by exact text.
 
 ## 1. Open the Deploy button

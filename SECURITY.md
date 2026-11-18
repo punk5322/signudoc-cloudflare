@@ -45,6 +45,27 @@ This policy covers the SignuDoc application code in this repository, including:
 
 Security fixes are applied to the latest release only.
 
+## How the code is checked
+
+- **Static analysis.** GitHub CodeQL (the `security-extended` queries) runs on every pull request, on `main` and weekly, over the TypeScript and over the GitHub Actions workflows. See `.github/workflows/codeql.yml`.
+- **Dependencies.** Every pull request runs GitHub's dependency review, which fails on a new dependency with a known high or critical vulnerability, or under a license this project does not take (GPL, AGPL, SSPL). `npm audit` checks what the app ships every week and on `main`. See `.github/workflows/dependency-audit.yml`.
+- **Repository practices.** OpenSSF Scorecard scores the repository weekly; the result is at [scorecard.dev](https://scorecard.dev/viewer/?uri=github.com/NYLLON-SOFTWARE/SignuDoc).
+- **Tests.** Typecheck, lint, unit tests, tests against a real Postgres and an end-to-end browser test run on every pull request (`.github/workflows/ci.yml`).
+
+## Verifying a release
+
+Each release from v0.3.0 on has these files attached, made by `.github/workflows/release-artifacts.yml`:
+
+- `signudoc-<version>.tar.gz`: the source of the tagged commit.
+- `signudoc-<version>.cdx.json`: a software bill of materials in CycloneDX format, listing every npm package the app ships with its version and license.
+- `SHA256SUMS`: their checksums.
+
+Each file has a GitHub artifact attestation, signed through Sigstore, saying which workflow run in this repository made it from which commit. To check one with the GitHub CLI:
+
+```sh
+gh attestation verify signudoc-<version>.tar.gz -R NYLLON-SOFTWARE/SignuDoc
+```
+
 ## Recognition
 
 We appreciate responsible disclosure. If you report a valid vulnerability, we are happy to credit you in the fix commit or release notes unless you prefer to remain anonymous.

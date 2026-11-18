@@ -1,0 +1,66 @@
+# For each published release: a software bill of materials (SBOM) and
+# signed build provenance, attached to the release.
+#
+# - signudoc-<version>.cdx.json: every npm package the app ships, with
+#   versions and licenses, in CycloneDX format (npm sbom).
+# - signudoc-<version>.tar.gz: the source of the tagged commit.
+# - GitHub artifact attestations for both, signed through Sigstore, so
+#   anyone can check they were made by this workflow from this repository:
+#     gh attestation verify signudoc-<version>.tar.gz -R NYLLON-SOFTWARE/SignuDoc
+#
+# Only in the SignuDoc repository itself; a copy skips it.
+
+name: Release artifacts
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to make the artifacts for, such as v0.3.0."
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  artifacts:
+    name: SBOM and provenance
+    if: github.repository == 'NYLLON-SOFTWARE/SignuDoc'
+    runs-on: ubuntu-latest
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ env.TAG }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Make the SBOM and the source archive
+        run: |
+          version="${TAG#v}"
+          echo "VERSION=${version}" >> "$GITHUB_ENV"
+          mkdir -p dist
+          npm sbom --omit=dev --sbom-format=cyclonedx --sbom-type=application > "dist/signudoc-${version}.cdx.json"
+          git archive --format=tar.gz --prefix="signudoc-${version}/" -o "dist/signudoc-${version}.tar.gz" HEAD
+          (cd dist && sha256sum * > SHA256SUMS)
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: dist/*
+      - uses: actions/attest-sbom@bd218ad0dbcb3e146bd073d1d9c6d78e08aa8a0b # v2.4.0
+        with:
+          subject-path: dist/signudoc-${{ env.VERSION }}.tar.gz
+          sbom-path: dist/signudoc-${{ env.VERSION }}.cdx.json
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"

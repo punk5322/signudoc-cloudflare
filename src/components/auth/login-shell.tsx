@@ -5,8 +5,18 @@ import { useRouter } from "next/navigation";
 import { useState, type ChangeEvent, type FormEvent } from "react";
 
 import { useBranding } from "@/components/layout/branding-provider";
+import {
+  describeSsoError,
+  SsoButton,
+  type SsoOption,
+} from "@/components/auth/sso-button";
 import { FieldShell, ShellButton } from "@/components/shared/form-shell";
 import { authClient } from "@/lib/auth/client";
+import {
+  describePasswordRefusal,
+  newPasswordLengthError,
+  PASSWORD_TOO_LONG_MESSAGE,
+} from "@/lib/password-messages";
 import { forgotPasswordSchema, loginSchema } from "@/lib/schemas/auth";
 import {
   Dialog,
@@ -20,6 +30,7 @@ const verificationRequiredMessage =
   "Verify your email before logging in. Check your inbox for a fresh link.";
 
 type AuthErrorLike = {
+  code?: string;
   message?: string;
 };
 
@@ -38,8 +49,13 @@ type ForgotPasswordFormErrors = Partial<
 >;
 
 type LoginShellProps = {
+  /** "on", "off", or "fallback": off, but a few addresses may still use one. */
+  passwordSignIn?: "fallback" | "off" | "on";
   resetError?: string | null;
   resetToken?: string | null;
+  sso?: SsoOption | null;
+  /** The ?error= single sign-on came back with. */
+  ssoError?: string | null;
 };
 
 type ForgotPasswordModel = {
@@ -101,16 +117,16 @@ function normalizeAuthErrorMessage(
   return error?.message?.trim().toLowerCase() ?? "";
 }
 
-export function LoginShell({
-  resetError = null,
-  resetToken = null,
-}: LoginShellProps) {
-  return <LiveLoginShell resetError={resetError} resetToken={resetToken} />;
+export function LoginShell(props: LoginShellProps) {
+  return <LiveLoginShell {...props} />;
 }
 
 function LiveLoginShell({
+  passwordSignIn = "on",
   resetError = null,
   resetToken = null,
+  sso = null,
+  ssoError = null,
 }: LoginShellProps) {
   const router = useRouter();
   const { signupAvailable } = useBranding();
@@ -121,7 +137,14 @@ function LiveLoginShell({
   const [bannerMessage, setBannerMessage] = useState<string | null>(
     resetError === "INVALID_TOKEN"
       ? "This reset link is invalid or has expired."
-      : null,
+      : ssoError
+        ? describeSsoError(ssoError)
+        : null,
+  );
+  // With password sign-in off, the form is only shown on request, for the
+  // few addresses that keep a password for when single sign-on is down.
+  const [showPasswordForm, setShowPasswordForm] = useState(
+    passwordSignIn === "on",
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [forgotPassword, setForgotPassword] = useState<ForgotPasswordModel>(
@@ -129,6 +152,8 @@ function LiveLoginShell({
   );
   const [isResendingVerification, setIsResendingVerification] = useState(false);
   const [showResendVerification, setShowResendVerification] = useState(false);
+  // The password was right and the account uses two-step sign-in.
+  const [needsSecondStep, setNeedsSecondStep] = useState(false);
 
   function handleChange(field: keyof LoginFormValues) {
     return (event: ChangeEvent<HTMLInputElement>) => {
@@ -225,9 +250,25 @@ function LiveLoginShell({
     if (result.error) {
       const normalizedErrorMessage = normalizeAuthErrorMessage(result.error);
 
-      if (normalizedErrorMessage.includes("email not verified")) {
+      const errorCode = (result.error as AuthErrorLike).code;
+
+      if (
+        errorCode === "SIGN_IN_LOCKED" ||
+        errorCode === "PASSWORD_SIGN_IN_OFF"
+      ) {
+        setBannerMessage(
+          result.error.message ??
+            "Too many wrong passwords. Try again in 15 minutes.",
+        );
+      } else if (normalizedErrorMessage.includes("email not verified")) {
         setBannerMessage(verificationRequiredMessage);
         setShowResendVerification(true);
+      } else if (
+        describePasswordRefusal(result.error) === PASSWORD_TOO_LONG_MESSAGE
+      ) {
+        // No account has a password this long, so it cannot be right. Say
+        // why instead of "Something went wrong" (issue #57).
+        setErrors({ password: PASSWORD_TOO_LONG_MESSAGE });
       } else {
         setBannerMessage(
           normalizedErrorMessage.includes("invalid email or password")
@@ -235,6 +276,16 @@ function LiveLoginShell({
             : "Something went wrong. Please try again.",
         );
       }
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (
+      result.data &&
+      typeof result.data === "object" &&
+      "twoFactorRedirect" in result.data
+    ) {
+      setNeedsSecondStep(true);
       setIsSubmitting(false);
       return;
     }
@@ -335,6 +386,19 @@ function LiveLoginShell({
     return <ResetPasswordCard resetToken={resetToken} />;
   }
 
+  if (needsSecondStep) {
+    return (
+      <SecondStepCard
+        onRestart={(message) => {
+          setNeedsSecondStep(false);
+          setValues((currentValues) => ({ ...currentValues, password: "" }));
+          setBannerMessage(message);
+        }}
+        onSignedIn={() => router.replace("/dashboard")}
+      />
+    );
+  }
+
   const formLocked = isSubmitting;
   const forgotPasswordLocked = forgotPassword.isSubmitting;
 
@@ -355,62 +419,90 @@ function LiveLoginShell({
             </p>
           ) : null}
 
-          <form className="space-y-5" noValidate onSubmit={handleSubmit}>
-            <FieldShell
-              autoComplete="email"
-              disabled={formLocked}
-              error={errors.email}
-              label="Email"
-              name="login-email"
-              onChange={handleChange("email")}
-              placeholder="jane@acmecorp.com"
-              readOnly={formLocked}
-              type="email"
-              value={values.email}
+          {sso ? (
+            <SsoButton
+              onError={setBannerMessage}
+              sso={sso}
+              variant={showPasswordForm ? "secondary" : "primary"}
             />
-            <FieldShell
-              autoComplete="current-password"
-              disabled={formLocked}
-              error={errors.password}
-              label="Password"
-              name="login-password"
-              onChange={handleChange("password")}
-              readOnly={formLocked}
-              type="password"
-              value={values.password}
-            />
-            <ShellButton
-              className="w-full"
-              disabled={formLocked}
-              loading={isSubmitting}
-              type="submit"
-            >
-              {isSubmitting ? "Logging in..." : "Log in"}
-            </ShellButton>
-            {showResendVerification ? (
-              <ShellButton
-                className="w-full"
-                disabled={formLocked}
-                loading={isResendingVerification}
-                onClick={handleResendVerification}
-                type="button"
-                variant="secondary"
-              >
-                {isResendingVerification
-                  ? "Sending..."
-                  : "Resend verification email"}
-              </ShellButton>
-            ) : null}
-          </form>
+          ) : null}
 
-          <div className="flex flex-col gap-3 border-t border-(--border) pt-5 text-sm text-(--secondary)">
+          {sso && showPasswordForm ? (
+            <p className="text-center text-xs font-semibold uppercase tracking-[0.12em] text-(--secondary)">
+              or
+            </p>
+          ) : null}
+
+          {showPasswordForm ? (
+            <>
+              <form className="space-y-5" noValidate onSubmit={handleSubmit}>
+                <FieldShell
+                  autoComplete="email"
+                  disabled={formLocked}
+                  error={errors.email}
+                  label="Email"
+                  name="login-email"
+                  onChange={handleChange("email")}
+                  placeholder="jane@acmecorp.com"
+                  readOnly={formLocked}
+                  type="email"
+                  value={values.email}
+                />
+                <FieldShell
+                  autoComplete="current-password"
+                  disabled={formLocked}
+                  error={errors.password}
+                  label="Password"
+                  name="login-password"
+                  onChange={handleChange("password")}
+                  readOnly={formLocked}
+                  type="password"
+                  value={values.password}
+                />
+                <ShellButton
+                  className="w-full"
+                  disabled={formLocked}
+                  loading={isSubmitting}
+                  type="submit"
+                >
+                  {isSubmitting ? "Logging in..." : "Log in"}
+                </ShellButton>
+                {showResendVerification ? (
+                  <ShellButton
+                    className="w-full"
+                    disabled={formLocked}
+                    loading={isResendingVerification}
+                    onClick={handleResendVerification}
+                    type="button"
+                    variant="secondary"
+                  >
+                    {isResendingVerification
+                      ? "Sending..."
+                      : "Resend verification email"}
+                  </ShellButton>
+                ) : null}
+              </form>
+            </>
+          ) : passwordSignIn === "fallback" ? (
             <button
-              className="w-fit p-0 text-left font-bold text-(--accent-ink) underline-offset-4 hover:underline"
-              onClick={openForgotPasswordModal}
+              className="w-fit p-0 text-left text-sm font-bold text-(--accent-ink) underline-offset-4 hover:underline"
+              onClick={() => setShowPasswordForm(true)}
               type="button"
             >
-              Forgot your password?
+              Sign in with a password instead
             </button>
+          ) : null}
+
+          <div className="flex flex-col gap-3 border-t border-(--border) pt-5 text-sm text-(--secondary)">
+            {showPasswordForm ? (
+              <button
+                className="w-fit p-0 text-left font-bold text-(--accent-ink) underline-offset-4 hover:underline"
+                onClick={openForgotPasswordModal}
+                type="button"
+              >
+                Forgot your password?
+              </button>
+            ) : null}
             {signupAvailable ? (
               <p>
                 Don&apos;t have an account?{" "}
@@ -551,8 +643,10 @@ function ResetPasswordCard({ resetToken }: { resetToken: string }) {
       formData.get("reset-password") ?? password,
     ).trim();
 
-    if (trimmedPassword.length < 15) {
-      setError("Password must be at least 15 characters");
+    const lengthError = newPasswordLengthError(trimmedPassword);
+
+    if (lengthError) {
+      setError(lengthError);
       setSuccessMessage(null);
       return;
     }
@@ -573,11 +667,8 @@ function ResetPasswordCard({ resetToken }: { resetToken: string }) {
       setError(
         normalizedErrorMessage.includes("invalid token")
           ? "This reset link is invalid or has expired."
-          : normalizedErrorMessage.includes("password too short")
-            ? "Password must be at least 15 characters"
-            : normalizedErrorMessage.includes("compromised")
-              ? "Choose a password that hasn't appeared in a breach"
-              : "Something went wrong. Please try again.",
+          : (describePasswordRefusal(result.error) ??
+              "Something went wrong. Please try again."),
       );
       setIsSubmitting(false);
       return;
@@ -639,6 +730,156 @@ function ResetPasswordCard({ resetToken }: { resetToken: string }) {
             {isSubmitting ? "Updating password..." : "Update password"}
           </ShellButton>
         </form>
+      </div>
+    </section>
+  );
+}
+
+type SecondStepCardProps = {
+  /** Back to the password, with a reason to show there. */
+  onRestart: (message: string) => void;
+  onSignedIn: () => void;
+};
+
+function SecondStepCard({ onRestart, onSignedIn }: SecondStepCardProps) {
+  const [code, setCode] = useState("");
+  const [useBackupCode, setUseBackupCode] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (isSubmitting) {
+      return;
+    }
+
+    const trimmed = code.replace(/\s+/g, "");
+
+    if (!useBackupCode && !/^\d{6}$/.test(trimmed)) {
+      setError("Enter the 6-digit code your authenticator app shows.");
+      return;
+    }
+
+    if (useBackupCode && trimmed.length === 0) {
+      setError("Enter one of your backup codes.");
+      return;
+    }
+
+    setError(null);
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch(
+        useBackupCode
+          ? "/api/auth/two-factor/verify-backup-code"
+          : "/api/auth/two-factor/verify-totp",
+        {
+          body: JSON.stringify({ code: trimmed }),
+          headers: { "content-type": "application/json" },
+          method: "POST",
+        },
+      );
+
+      if (response.ok) {
+        onSignedIn();
+        return;
+      }
+
+      const payload = (await response.json().catch(() => null)) as {
+        code?: string;
+        message?: string;
+      } | null;
+
+      switch (payload?.code) {
+        case "INVALID_CODE":
+          setError(
+            "That code is not right. Check the time on your phone and try the newest code.",
+          );
+          break;
+        case "INVALID_BACKUP_CODE":
+          setError("That backup code is not right, or it was used before.");
+          break;
+        case "ACCOUNT_TEMPORARILY_LOCKED":
+          setError(
+            "Too many wrong codes. Two-step sign-in is locked for 15 minutes.",
+          );
+          break;
+        case "TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE":
+          onRestart("Too many wrong codes. Log in again to get a new try.");
+          return;
+        case "INVALID_TWO_FACTOR_COOKIE":
+          onRestart("That took too long. Log in again.");
+          return;
+        default:
+          setError("Something went wrong. Please try again.");
+      }
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="panel w-full max-w-[460px] p-8 sm:p-10">
+      <div className="space-y-7">
+        <div className="space-y-2">
+          <p className="section-eyebrow">Two-step sign-in</p>
+          <h1 className="text-[clamp(1.875rem,4.5vw,2.375rem)] font-extrabold leading-[1.08] tracking-[-0.035em] text-(--fg)">
+            {useBackupCode ? "Enter a backup code" : "Enter your code"}
+          </h1>
+          <p className="text-sm leading-6 text-(--secondary)">
+            {useBackupCode
+              ? "Each backup code works once."
+              : "Open your authenticator app and enter the 6-digit code it shows."}
+          </p>
+        </div>
+
+        {error ? (
+          <p className="notice notice-danger" role="alert">
+            {error}
+          </p>
+        ) : null}
+
+        <form className="space-y-5" noValidate onSubmit={handleSubmit}>
+          <FieldShell
+            autoComplete="one-time-code"
+            disabled={isSubmitting}
+            label={useBackupCode ? "Backup code" : "6-digit code"}
+            name="second-step-code"
+            onChange={(event) => {
+              setCode(event.target.value);
+              setError(null);
+            }}
+            readOnly={isSubmitting}
+            value={code}
+          />
+          <ShellButton
+            className="w-full"
+            disabled={isSubmitting}
+            loading={isSubmitting}
+            type="submit"
+          >
+            {isSubmitting ? "Checking..." : "Continue"}
+          </ShellButton>
+        </form>
+
+        <div className="border-t border-(--border) pt-5 text-sm">
+          <button
+            className="w-fit p-0 text-left font-bold text-(--accent-ink) underline-offset-4 hover:underline"
+            onClick={() => {
+              setUseBackupCode((current) => !current);
+              setCode("");
+              setError(null);
+            }}
+            type="button"
+          >
+            {useBackupCode
+              ? "Use a code from your app instead"
+              : "Lost your phone? Use a backup code"}
+          </button>
+        </div>
       </div>
     </section>
   );

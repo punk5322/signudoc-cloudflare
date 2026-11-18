@@ -46,6 +46,12 @@ export type OrganizationSettingsView = {
   logoUrl: string | null;
   organizationName: string;
   privacyUrl: string;
+  /** Everyone must use two-step sign-in. Changed in the security panel. */
+  requireTwoFactor: boolean;
+  /** Minutes without use before a session ends, or null for no limit. */
+  sessionIdleMinutes: number | null;
+  /** Hours after sign-in when a session ends, or null for 7 days. */
+  sessionMaxHours: number | null;
   /** Days, as typed. Empty keeps finished envelopes until deleted by hand. */
   retentionDays: string;
   senderAddress: string;
@@ -70,6 +76,9 @@ export function toOrganizationSettingsView(
     organizationName: settings.organizationName ?? "",
     part11Mode: settings.part11Mode,
     privacyUrl: settings.privacyUrl ?? "",
+    requireTwoFactor: settings.requireTwoFactor,
+    sessionIdleMinutes: settings.sessionIdleMinutes,
+    sessionMaxHours: settings.sessionMaxHours,
     retentionDays:
       settings.retentionDays === null ? "" : String(settings.retentionDays),
     senderAddress: settings.senderAddress ?? "",

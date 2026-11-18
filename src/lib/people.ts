@@ -41,6 +41,8 @@ export type Person = {
   role: PersonRole;
   /** When wrong passwords at signing locked the account for signing. */
   signingLockedAt: number | null;
+  /** Signs in with an authenticator code after the password. */
+  twoFactorEnabled: boolean;
 };
 
 export type PeopleList = {
@@ -74,6 +76,7 @@ type PersonRow = {
   name: string;
   role: string;
   signingLockedAt: number | null;
+  twoFactorEnabled: boolean | null;
 };
 
 const PERSON_COLUMNS = `
@@ -86,6 +89,7 @@ const PERSON_COLUMNS = `
   u.identity_verified_at AS "identityVerifiedAt",
   u.identity_verification_note AS "identityVerificationNote",
   u.signing_locked_at AS "signingLockedAt",
+  u."twoFactorEnabled" AS "twoFactorEnabled",
   EXISTS (
     SELECT 1 FROM account_closure_requests c WHERE c.user_id = u.id
   ) AS closing,
@@ -113,6 +117,7 @@ function mapPerson(row: PersonRow): Person {
     name: row.name,
     role: row.role === "admin" ? "admin" : "user",
     signingLockedAt: row.signingLockedAt ?? null,
+    twoFactorEnabled: row.twoFactorEnabled === true,
   };
 }
 

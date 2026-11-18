@@ -48,7 +48,7 @@
 
 ### Prepare a document in minutes
 
-Upload a PDF, add up to 10 signers in the order they sign, and add people who only receive the finished copy. Then place fields where they belong: signature, initials, date, text, number, checkbox, dropdown and radio buttons, each required or optional and each tied to one signer.
+Upload a PDF, add up to 10 signers in the order they sign, and add people who only receive the finished copy. Then place fields where they belong: signature, initials, date, name, text, number, checkbox, dropdown and radio buttons, each required or optional and each tied to one signer.
 
 ![Placing signature, date and dropdown fields for two signers on a master services agreement](docs/images/prepare.png)
 
@@ -132,7 +132,7 @@ DocuSign does more, and charges for it per user. SignuDoc does the everyday sign
 | **Signing without an account**               | ✅                                                                                                                          | ✅                                                                           |
 | **Signing order**                            | ✅ in order, up to 10 signers                                                                                               | ✅ in order, at the same time, or mixed                                      |
 | **People who only get a copy**               | ✅                                                                                                                          | ✅ and more roles: approvers, editors, in-person signers                     |
-| **Field types**                              | ✅ signature, initials, date, text, number, checkbox, dropdown, radio, each required or optional                            | ✅ more types; dropdown, radio and signer attachments need Business Pro      |
+| **Field types**                              | ✅ signature, initials, date, name, text, number, checkbox, dropdown, radio, each required or optional                      | ✅ more types; dropdown, radio and signer attachments need Business Pro      |
 | **Templates**                                | ✅                                                                                                                          | ✅ from Personal, shared from Standard                                       |
 | **Deadlines and automatic reminders**        | ✅                                                                                                                          | ✅                                                                           |
 | **Access code and emailed one-time code**    | ✅                                                                                                                          | ✅ plus SMS, phone, knowledge-based questions and ID checks, as paid add-ons |

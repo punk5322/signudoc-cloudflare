@@ -5,6 +5,8 @@ import { useState, type ChangeEvent, type FormEvent } from "react";
 import { useBranding } from "@/components/layout/branding-provider";
 import { FieldShell, ShellButton } from "@/components/shared/form-shell";
 import { PageHeader } from "@/components/shared/page-header";
+import { SessionsPanel } from "@/components/settings/sessions-panel";
+import { TwoFactorPanel } from "@/components/settings/two-factor-panel";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +22,7 @@ const GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again.";
 
 type SettingsShellProps = {
   initialProfile?: ProfileValues;
+  twoFactor?: { enabled: boolean; required: boolean };
 };
 
 type FeedbackTone = "error" | "success";
@@ -160,6 +163,7 @@ function isNoOpEmailChangeMessage(message: string) {
 
 export function SettingsShell({
   initialProfile = defaultProfileValues,
+  twoFactor = { enabled: false, required: false },
 }: SettingsShellProps) {
   const closureCopy = useClosureCopy();
   const [profileValues, setProfileValues] = useState(initialProfile);
@@ -552,7 +556,7 @@ export function SettingsShell({
   return (
     <div className="space-y-5">
       <PageHeader
-        description="Manage your sender profile, password, and account lifecycle."
+        description="Manage your sender profile, password, two-step sign-in and account lifecycle."
         title="Settings"
       />
 
@@ -655,6 +659,13 @@ export function SettingsShell({
               </form>
             </div>
           </div>
+
+          <TwoFactorPanel
+            enabled={twoFactor.enabled}
+            required={twoFactor.required}
+          />
+
+          <SessionsPanel />
 
           <div className="panel p-6 sm:p-8">
             <div className="space-y-5">

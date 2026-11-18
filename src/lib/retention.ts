@@ -15,6 +15,7 @@ import {
   type StorageService,
 } from "./services/storage.ts";
 import { createEmailService, type EmailService } from "./services/email.ts";
+import { recordSystemAuditEvent } from "./services/system-audit.ts";
 import { readStoredSettings } from "./settings.ts";
 import { type EnvSource, isHostedMode, resolveAppUrl } from "./utils/env.ts";
 
@@ -619,6 +620,29 @@ async function deleteAccountRows(
   for (const template of templates) {
     storageKeys.add(template.sourcePdfKey);
   }
+
+  // The access it ends is worth a line in the install's trail, which lands
+  // or rolls back with the delete. The hosted service keeps nothing of a
+  // closed account, its address included.
+  const closed = await queryOne<{ email: string }>(
+    database,
+    `SELECT email FROM "user" WHERE id = $1`,
+    [userId],
+  );
+
+  await recordSystemAuditEvent(
+    {
+      actorEmail: null,
+      actorUserId: null,
+      event: "account_deleted",
+      metadata: {
+        email: keepFinishedEnvelopes ? (closed?.email ?? null) : null,
+        reason: "closure_requested",
+      },
+      targetUserId: userId,
+    },
+    database,
+  );
 
   await database.query(
     `

@@ -57,6 +57,7 @@ export function PeoplePanel({ part11Mode = false }: { part11Mode?: boolean }) {
   const latestSearch = useRef(search);
   // Part 11: the person whose identity is being confirmed, and how.
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [resettingId, setResettingId] = useState<string | null>(null);
   const [verificationNote, setVerificationNote] = useState("");
 
   useEffect(() => {
@@ -141,6 +142,44 @@ export function PeoplePanel({ part11Mode = false }: { part11Mode?: boolean }) {
 
       // The search moved on while this was being saved. The list that came
       // back answers the old one, so the list is asked for again.
+      if (latestSearch.current !== search) {
+        setReloads((count) => count + 1);
+        return;
+      }
+
+      setList(changed);
+    } catch {
+      setError(GENERIC_ERROR_MESSAGE);
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function resetTwoFactorFor(person: Person) {
+    if (pendingId) {
+      return;
+    }
+
+    setPendingId(person.id);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `/api/admin/people/${encodeURIComponent(person.id)}/two-factor?search=${encodeURIComponent(search)}`,
+        { method: "DELETE" },
+      );
+      const payload = (await response
+        .json()
+        .catch(() => null)) as PeopleResponse;
+      const changed = readPeopleList(payload);
+
+      if (!response.ok || !changed) {
+        setError(payload?.error ?? GENERIC_ERROR_MESSAGE);
+        return;
+      }
+
+      setResettingId(null);
+
       if (latestSearch.current !== search) {
         setReloads((count) => count + 1);
         return;
@@ -304,7 +343,49 @@ export function PeoplePanel({ part11Mode = false }: { part11Mode?: boolean }) {
                     {person.signingLockedAt !== null ? (
                       <span className="pill pill-danger">Signing locked</span>
                     ) : null}
+                    {person.twoFactorEnabled ? (
+                      <span className="pill pill-success">Two-step on</span>
+                    ) : null}
                   </div>
+                  {person.twoFactorEnabled && !isYou ? (
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      {resettingId === person.id ? (
+                        <>
+                          <span className="text-sm text-(--secondary)">
+                            Turn off their two-step sign-in and sign them out
+                            everywhere?
+                          </span>
+                          <button
+                            className="btn-quiet btn-quiet-danger"
+                            disabled={pendingId !== null}
+                            onClick={() => void resetTwoFactorFor(person)}
+                            type="button"
+                          >
+                            {pendingId === person.id ? "Resetting..." : "Reset"}
+                          </button>
+                          <button
+                            className="btn-quiet"
+                            disabled={pendingId !== null}
+                            onClick={() => setResettingId(null)}
+                            type="button"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          aria-label={`Reset two-step sign-in for ${person.name}`}
+                          className="btn-quiet"
+                          disabled={pendingId !== null}
+                          onClick={() => setResettingId(person.id)}
+                          title="For someone who lost their phone and their backup codes."
+                          type="button"
+                        >
+                          Reset two-step sign-in
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
                   {/* Envelopes sent in Part 11 mode keep its rules after it is
                       turned off, so the controls stay for anyone they still
                       concern. */}

@@ -2,10 +2,9 @@ import { NextResponse } from "next/server";
 
 import { getAuthSessionFromHeaders } from "./server.ts";
 import { logSecurityEvent } from "../security/logging.ts";
-import {
-  getClientIpAddress,
-  getRequestPathname,
-} from "../security/request.ts";
+import { getSettings } from "../settings.ts";
+import { needsTwoFactorSetup } from "../sign-in-security.ts";
+import { getClientIpAddress, getRequestPathname } from "../security/request.ts";
 
 export async function requireVerifiedSenderSession(request: Request) {
   const session = await getAuthSessionFromHeaders(request.headers);
@@ -15,6 +14,13 @@ export async function requireVerifiedSenderSession(request: Request) {
   }
 
   if (session.user.emailVerified === true) {
+    if (await needsTwoFactorSetup(await getSettings(), session.user)) {
+      return NextResponse.json(
+        { error: "Set up two-step sign-in before continuing." },
+        { status: 403 },
+      );
+    }
+
     return session;
   }
 

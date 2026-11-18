@@ -79,6 +79,20 @@ test("the agent deploy guide opens the same link as the button", () => {
   );
 });
 
+test("the agent deploy guide checks Vercel's Hobby rule before picking free plans", () => {
+  const guide = readFileSync(
+    path.join(repoRoot, "docs", "deploy-with-an-agent.md"),
+    "utf8",
+  );
+
+  // Hobby is for personal, non-commercial use only (issue #47), so an agent
+  // must not put an organization's install on it just because it is free.
+  assert.doesNotMatch(guide, /free plan\*\* at every choice/);
+  assert.match(guide, /personal, non-commercial use/);
+  assert.match(guide, /Vercel Pro/);
+  assert.match(guide, /Never pay or upgrade without their say-so/);
+});
+
 test("the button asks for nothing to be typed in, and carries no values", () => {
   const link = readDeployLink();
 

@@ -23,6 +23,10 @@ import {
   renderPdfThumbnail,
   uploadEnvelopeThumbnail,
 } from "@/lib/pdf-thumbnail";
+import {
+  describePdfPreviewFailure,
+  PREVIEW_UNAVAILABLE_MESSAGE,
+} from "@/lib/pdf-preview-error";
 import { assertPdfPreviewRenderable } from "@/lib/pdfjs-client";
 import { type CreateEnvelopeResponse } from "@/lib/schemas/envelope";
 
@@ -39,8 +43,7 @@ type UploadSummary = {
 
 const errorMessageMap: Record<UploadErrorCode, string> = {
   "invalid-type": "Only PDF files are supported. Please upload a valid PDF.",
-  "preview-unavailable":
-    "We couldn't render this PDF in the editor. Please export it as a standard PDF and try again.",
+  "preview-unavailable": PREVIEW_UNAVAILABLE_MESSAGE,
   "too-large": "This file exceeds the 20 MB limit.",
 };
 
@@ -503,7 +506,7 @@ export function UploadShell({ directUploadPrefix = null }: UploadShellProps) {
           "Failed to validate the PDF preview before draft creation.",
           error,
         );
-        setErrorMessage(errorMessageMap["preview-unavailable"]);
+        setErrorMessage(describePdfPreviewFailure(error));
         setIsCreatingDraft(false);
         return;
       }

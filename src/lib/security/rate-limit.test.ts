@@ -53,6 +53,7 @@ test("in memory, requests up to the limit are allowed and the next is not", () =
 
   assert.deepEqual(consumeRateLimitInMemory({ ...input, now: START + 10 }), {
     allowed: false,
+    count: 4,
     retryAfterSeconds: 60,
   });
 });
@@ -111,7 +112,11 @@ test("the database's count decides, and only a hash of the key is sent to it", a
     { database },
   );
 
-  assert.deepEqual(decision, { allowed: false, retryAfterSeconds: 30 });
+  assert.deepEqual(decision, {
+    allowed: false,
+    count: 6,
+    retryAfterSeconds: 30,
+  });
 
   const [hashedKey, now, windowMs] = queries[0]?.values ?? [];
 

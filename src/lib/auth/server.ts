@@ -1,7 +1,7 @@
 import { APIError, betterAuth } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
-import { haveIBeenPwned } from "better-auth/plugins";
+import { genericOAuth, haveIBeenPwned, twoFactor } from "better-auth/plugins";
 import { headers } from "next/headers";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { after } from "next/server";
@@ -22,7 +22,14 @@ import {
   requireConfigValue,
   ServiceConfigurationError,
 } from "../services/service-config.ts";
-import { evaluateSignupRequest, getBranding } from "../settings.ts";
+import {
+  evaluateSignupRequest,
+  getBranding,
+  getSettings,
+  isMissingSchemaError,
+} from "../settings.ts";
+import { enforceSessionLimits } from "../session-controls.ts";
+import { clearFailedSignIns } from "../sign-in-security.ts";
 import {
   getEnv,
   resolveDeploymentOrigins,
@@ -30,6 +37,14 @@ import {
 } from "../utils/env.ts";
 import { escapeHtml } from "../utils/html.ts";
 import { isRunningSetup } from "./setup-context.ts";
+import { signInEvents } from "./sign-in-events.ts";
+import {
+  mayUsePassword,
+  readPasswordSignInPolicy,
+  readSsoConfig,
+  SSO_PROVIDER_ID,
+} from "./sso.ts";
+import { recordSystemAuditEvent } from "../services/system-audit.ts";
 
 type CreateAppAuthOptions = {
   database?: Pool;
@@ -242,6 +257,15 @@ function isPasswordBreachCheckEnabled(env: EnvSource): boolean {
   );
 }
 
+// Where a password is used or handed out. A reset link is only sent where
+// a password may be used, so turning password sign-in off cannot be undone
+// with "Forgot your password?".
+const PASSWORD_PATHS = new Set([
+  "/request-password-reset",
+  "/sign-in/email",
+  "/sign-up/email",
+]);
+
 export function createAppAuth({
   database = getDb(),
   env = process.env,
@@ -265,7 +289,40 @@ export function createAppAuth({
 
     return cachedEmailService;
   };
+  const sso = readSsoConfig(env);
+  const passwordPolicy = readPasswordSignInPolicy(env);
   const plugins = [
+    // Single sign-on with the organization's identity provider (sso.ts).
+    // Its sign-ins do not ask for this app's second step: the provider's
+    // own sign-in, with its own MFA, is the check.
+    ...(sso
+      ? [
+          genericOAuth({
+            config: [
+              {
+                clientId: sso.clientId,
+                clientSecret: sso.clientSecret,
+                discoveryUrl: sso.discoveryUrl,
+                // A provider whose discovery cannot vouch for its ID tokens
+                // is left out rather than trusted unchecked.
+                requireIdTokenVerification: true,
+                // Microsoft Entra ID leaves email_verified out of its
+                // tokens. The organization's own directory is trusted for
+                // its addresses unless it says one is not verified.
+                mapProfileToUser: (profile) => ({
+                  emailVerified:
+                    profile.email_verified !== false &&
+                    profile.email_verified !== "false",
+                }),
+                name: sso.name,
+                pkce: true,
+                providerId: SSO_PROVIDER_ID,
+                scopes: ["openid", "email", "profile"],
+              },
+            ],
+          }),
+        ]
+      : []),
     ...(isPasswordBreachCheckEnabled(env)
       ? [
           haveIBeenPwned({
@@ -274,6 +331,21 @@ export function createAppAuth({
           }),
         ]
       : []),
+    // Two-step sign-in with an authenticator app, and ten single-use backup
+    // codes for when the phone is not at hand. Both are stored encrypted
+    // with BETTER_AUTH_SECRET. "Trust this device" is not offered, so every
+    // sign-in asks for the second step.
+    twoFactor({
+      accountLockout: {
+        durationSeconds: 15 * 60,
+        enabled: true,
+        maxFailedAttempts: 10,
+      },
+      backupCodeOptions: { amount: 10, length: 10 },
+      skipVerificationOnEnable: false,
+    }),
+    // After the two-factor plugin: see sign-in-events.ts.
+    signInEvents(),
     ...(includeNextCookies ? [nextCookies()] : []),
   ];
   return betterAuth({
@@ -337,6 +409,20 @@ export function createAppAuth({
       minPasswordLength: 15,
       requireEmailVerification: true,
       revokeSessionsOnPasswordReset: true,
+      onPasswordReset: async ({ user }) => {
+        try {
+          // The new password ends a lockout from wrong guesses at the old one.
+          await clearFailedSignIns(user.email);
+          await recordSystemAuditEvent({
+            actorEmail: user.email,
+            actorUserId: user.id,
+            event: "password_reset",
+            targetUserId: user.id,
+          });
+        } catch (error) {
+          console.error("[auth] Could not record a password reset:", error);
+        }
+      },
       sendResetPassword: async ({ url, user }) => {
         sendAuthEmailInBackground({
           buildContent: (branding) =>
@@ -361,7 +447,7 @@ export function createAppAuth({
       // address's domain and is printed on the sign-up page, so saying it
       // here gives nothing away.
       before: createAuthMiddleware(async (ctx) => {
-        if (ctx.path !== "/sign-up/email" || isRunningSetup()) {
+        if (isRunningSetup()) {
           return;
         }
 
@@ -373,6 +459,24 @@ export function createAppAuth({
           typeof body.email === "string"
             ? body.email
             : "";
+
+        // With password sign-in turned off, only the addresses kept for
+        // when the identity provider is down may use one (sso.ts).
+        if (
+          sso &&
+          PASSWORD_PATHS.has(ctx.path ?? "") &&
+          !mayUsePassword(passwordPolicy, email)
+        ) {
+          throw new APIError("FORBIDDEN", {
+            code: "PASSWORD_SIGN_IN_OFF",
+            message: `Password sign-in is turned off here. Continue with ${sso.name} instead.`,
+          });
+        }
+
+        if (ctx.path !== "/sign-up/email") {
+          return;
+        }
+
         const decision = await evaluateSignupRequest(email, env);
 
         if (!decision.allowed) {
@@ -466,9 +570,33 @@ export function getAuth(): AppAuth {
 }
 
 export async function getAuthSessionFromHeaders(requestHeaders: Headers) {
-  return getAuth().api.getSession({
+  const session = await getAuth().api.getSession({
     headers: requestHeaders,
   });
+
+  if (!session) {
+    return null;
+  }
+
+  // The session cookie can vouch for a session for a few minutes on its
+  // own. Its row decides: one that was ended (signed out everywhere, reset
+  // by an administrator) or that is past the install's limits does not
+  // count. See session-controls.ts.
+  try {
+    const allowed = await enforceSessionLimits(
+      session.session.token,
+      await getSettings(),
+    );
+
+    return allowed ? session : null;
+  } catch (error) {
+    // A database from before the session controls: nothing to enforce yet.
+    if (isMissingSchemaError(error)) {
+      return session;
+    }
+
+    throw error;
+  }
 }
 
 const getCachedAuthSession = cache(async () => {

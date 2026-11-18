@@ -10,6 +10,7 @@ import { buildBranding } from "@/lib/branding";
 import { emailNeedsAttention } from "@/lib/email-status";
 import { getInstallMetadata } from "@/lib/install";
 import { getSettings } from "@/lib/settings";
+import { needsTwoFactorSetup } from "@/lib/sign-in-security";
 
 export function generateMetadata(): Promise<Metadata> {
   return getInstallMetadata();
@@ -30,6 +31,12 @@ export default async function AuthenticatedAppLayout({
     getSettings(),
     isAdminUser(session.user.id),
   ]);
+
+  // The install requires two-step sign-in and this person has not set it
+  // up: nothing else until they have.
+  if (await needsTwoFactorSetup(settings, session.user)) {
+    redirect("/two-step-setup");
+  }
 
   return (
     <BrandingProvider branding={buildBranding(settings)}>

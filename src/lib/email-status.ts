@@ -102,6 +102,8 @@ export type ResendDomainsClient = Pick<
 type EmailStatusOptions = {
   domainsClient?: ResendDomainsClient;
   env?: EnvSource;
+  /** Called once Resend has created the domain, so the change can be audited. */
+  onDomainCreated?: (domain: string) => Promise<void>;
   /** Replaced in tests, where there is no database to write the result to. */
   recordReady?: (ready: boolean) => Promise<void>;
   settings?: ResolvedSettings;
@@ -525,6 +527,8 @@ export async function addEmailDomain(
   if (created.error) {
     return toErrorStatus(created.error, status.domain, status.senderAddress);
   }
+
+  await options.onDomainCreated?.(status.domain);
 
   return {
     domain: status.domain,

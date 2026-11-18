@@ -19,6 +19,7 @@ import {
 } from "./retention.ts";
 import { resolvePublicSupportAddress } from "./public-contact.ts";
 import { createEmailService } from "./services/email.ts";
+import { recordSystemAuditEvent } from "./services/system-audit.ts";
 import { getBranding } from "./settings.ts";
 import { type EnvSource } from "./utils/env.ts";
 
@@ -237,6 +238,22 @@ export async function requestAccountClosure(
   const closureSchedule = await scheduleAccountClosure(userId, database);
 
   if (!closureSchedule.alreadyQueued) {
+    await recordSystemAuditEvent(
+      {
+        actorEmail: account.email,
+        actorUserId: userId,
+        event: "account_closure_requested",
+        metadata: { purgeAfterAt: closureSchedule.purgeAfterAt },
+        targetUserId: userId,
+      },
+      database,
+    ).catch((error: unknown) => {
+      console.error(
+        `Failed to record the account closure request for user ${userId}:`,
+        error,
+      );
+    });
+
     const submittedAt = formatRetentionDeadline(closureSchedule.requestedAt);
     const exportExpiresAt = formatRetentionDeadline(
       closureSchedule.exportExpiresAt,

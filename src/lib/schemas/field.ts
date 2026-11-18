@@ -95,7 +95,8 @@ export const fieldPlacementSchema = z
     if (
       (field.type === "signature" ||
         field.type === "initials" ||
-        field.type === "date") &&
+        field.type === "date" ||
+        field.type === "name") &&
       !field.required
     ) {
       ctx.addIssue({

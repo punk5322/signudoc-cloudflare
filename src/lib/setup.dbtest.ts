@@ -168,6 +168,52 @@ test("setup without a support address is refused before any account exists", asy
   );
 });
 
+test("a password over 128 characters is refused with the limit before any account exists (issue #56)", async () => {
+  const tooLong = `Ab7!${"rT9#".repeat(31)}Z`;
+
+  assert.equal(tooLong.length, 129);
+  await assert.rejects(
+    completeSetup(
+      { ...setupInput, password: tooLong },
+      {
+        createAdminAccount: async () => {
+          throw new Error("no account may be created");
+        },
+        database,
+        env,
+      },
+    ),
+    (error: unknown) => {
+      assert.ok(error instanceof SetupError);
+      assert.equal(error.statusCode, 400);
+      assert.deepEqual(error.fieldErrors, {
+        password: "Password must be at most 128 characters",
+      });
+
+      return true;
+    },
+  );
+  assert.equal(await countUsers(), 0);
+  assert.deepEqual(await readSetupState(database), { status: "fresh" });
+
+  // Exactly 128 is still allowed, and the account gets it unchanged.
+  const atLimit = tooLong.slice(0, 128);
+  let given = "";
+
+  await completeSetup(
+    { ...setupInput, password: atLimit },
+    {
+      createAdminAccount: async ({ email, password }) => {
+        given = password;
+        return { userId: await insertUser(email) };
+      },
+      database,
+      env,
+    },
+  );
+  assert.equal(given, atLimit);
+});
+
 test("a deployment that sets SUPPORT_EMAIL is not asked for a support address", async () => {
   const fixed = { SUPPORT_EMAIL: "Acme Help <desk@acme.com>" };
   const withoutSupportAddress: Record<string, string> = { ...setupInput };

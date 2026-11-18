@@ -142,6 +142,10 @@ const FIELD_MESSAGES: Record<SetupFieldName, string> = {
   supportAddress: "Enter an email address people can write to for help",
 };
 
+// A password over the limit is refused, never shortened: the account must
+// be made with exactly what was typed (issue #56).
+const PASSWORD_TOO_LONG_MESSAGE = "Password must be at most 128 characters";
+
 function toFieldErrors(error: z.ZodError) {
   const fieldErrors: Partial<Record<SetupFieldName, string>> = {};
 
@@ -150,7 +154,9 @@ function toFieldErrors(error: z.ZodError) {
 
     if (typeof field === "string" && field in FIELD_MESSAGES) {
       fieldErrors[field as SetupFieldName] ??=
-        FIELD_MESSAGES[field as SetupFieldName];
+        field === "password" && issue.code === "too_big"
+          ? PASSWORD_TOO_LONG_MESSAGE
+          : FIELD_MESSAGES[field as SetupFieldName];
     }
   }
 

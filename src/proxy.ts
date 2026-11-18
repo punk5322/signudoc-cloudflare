@@ -1,9 +1,7 @@
 import type { NextRequest } from "next/server";
-import { getCookieCache } from "better-auth/cookies";
 import { NextResponse } from "next/server";
 
 import { supportsDirectUploads } from "@/lib/services/storage/driver";
-import { resolveAuthSecret, resolveAuthUrl } from "@/lib/utils/env";
 
 const DEFAULT_PERMISSIONS_POLICY = [
   "accelerometer=()",
@@ -154,73 +152,15 @@ function applySecurityHeaders(response: NextResponse, pathname: string) {
   return response;
 }
 
-// True only for a session the auth server would accept without looking it
-// up: its signed, short-lived copy in the cookie cache. The session token
-// cookie on its own proves nothing. It outlives a session that was signed
-// out elsewhere, expired, or belongs to a database that has been replaced,
-// and sending such a visitor to the dashboard would bounce them straight
-// back here, forever. Someone signed in whose cached copy has run out is
-// sent on by the page itself, which asks the auth server.
-async function hasVerifiedSession(request: NextRequest) {
-  // Resolved the same way the auth server does, so this keeps working when
-  // the secret is derived rather than set.
-  const secret = resolveAuthSecret();
+// The sign-in and sign-up pages send someone already signed in on to their
+// documents themselves (redirectIfSignedIn), after asking the auth server.
+// This proxy does not: the cookie cache can still vouch for a session for a
+// few minutes after it was ended or passed the install's session limits,
+// and trusting it here would bounce that visitor between /login and
+// /dashboard until it ran out.
 
-  if (!secret) {
-    return false;
-  }
-
-  try {
-    const session = await getCookieCache(request, {
-      isSecure: resolveAuthUrl()?.startsWith("https://") ?? false,
-      secret,
-    });
-
-    return session !== null;
-  } catch {
-    return false;
-  }
-}
-
-async function maybeRedirectAuthenticatedAuthRoute(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-
-  if (pathname !== "/login" && pathname !== "/signup") {
-    return null;
-  }
-
-  if (pathname === "/login") {
-    const hasResetState =
-      request.nextUrl.searchParams.has("token") ||
-      request.nextUrl.searchParams.has("error");
-
-    if (hasResetState) {
-      return null;
-    }
-  }
-
-  const hasSession = await hasVerifiedSession(request);
-
-  if (!hasSession) {
-    return null;
-  }
-
-  const dashboardUrl = request.nextUrl.clone();
-
-  dashboardUrl.pathname = "/dashboard";
-  dashboardUrl.search = "";
-
-  return NextResponse.redirect(dashboardUrl);
-}
-
-export async function proxy(request: NextRequest) {
-  const pathname = request.nextUrl.pathname;
-  const authRedirect = await maybeRedirectAuthenticatedAuthRoute(request);
-
-  if (authRedirect) {
-    return applySecurityHeaders(authRedirect, pathname);
-  }
-
   return applySecurityHeaders(NextResponse.next(), pathname);
 }
 

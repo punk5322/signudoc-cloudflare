@@ -13,6 +13,8 @@ import { getDb, type DbExecutor } from "../db/connection.ts";
 
 export type RateLimitDecision = {
   allowed: boolean;
+  /** Requests counted in the current window, this one included. */
+  count: number;
   /** Seconds until the current window ends. At least 1 when not allowed. */
   retryAfterSeconds: number;
 };
@@ -64,6 +66,7 @@ function toDecision(
 ): RateLimitDecision {
   return {
     allowed: count <= input.limit,
+    count,
     retryAfterSeconds: Math.max(1, Math.ceil((expiresAt - now) / 1000)),
   };
 }
@@ -183,6 +186,69 @@ export async function consumeRateLimit(
     warnAboutFallback(error);
 
     return consumeRateLimitInMemory({ ...input, now });
+  }
+}
+
+type PeekRateLimitInput = Omit<RateLimitInput, "windowMs">;
+
+/**
+ * Whether a limit is already used up, without counting anything. For limits
+ * that count only some requests (failed sign-ins), checked before each one.
+ */
+export async function peekRateLimit(
+  input: PeekRateLimitInput,
+  { database }: ConsumeRateLimitOptions = {},
+): Promise<RateLimitDecision> {
+  const now = input.now ?? Date.now();
+  let entry: MemoryEntry | undefined;
+
+  try {
+    const result = await (database ?? getDb()).query<{
+      count: number;
+      expires_at: number;
+    }>(
+      "select count, expires_at from public.rate_limits where key = $1 and expires_at > $2",
+      [hashKey(input.key), now],
+    );
+    const row = result.rows[0];
+
+    entry = row
+      ? { count: row.count, expiresAt: Number(row.expires_at) }
+      : undefined;
+  } catch (error) {
+    warnAboutFallback(error);
+
+    const memoryEntry = memoryStore.get(input.key);
+
+    entry =
+      memoryEntry && memoryEntry.expiresAt > now ? memoryEntry : undefined;
+  }
+
+  if (!entry) {
+    return { allowed: true, count: 0, retryAfterSeconds: 1 };
+  }
+
+  return {
+    allowed: entry.count < input.limit,
+    count: entry.count,
+    retryAfterSeconds: Math.max(1, Math.ceil((entry.expiresAt - now) / 1000)),
+  };
+}
+
+/** Forgets a limit's count, as after a sign-in that worked. */
+export async function clearRateLimit(
+  key: string,
+  { database }: ConsumeRateLimitOptions = {},
+): Promise<void> {
+  memoryStore.delete(key);
+
+  try {
+    await (database ?? getDb()).query(
+      "delete from public.rate_limits where key = $1",
+      [hashKey(key)],
+    );
+  } catch (error) {
+    warnAboutFallback(error);
   }
 }
 

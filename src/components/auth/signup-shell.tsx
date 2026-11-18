@@ -8,8 +8,14 @@ import {
   type FormEvent,
 } from "react";
 
+import { SsoButton, type SsoOption } from "@/components/auth/sso-button";
 import { FieldShell, ShellButton } from "@/components/shared/form-shell";
 import { authClient } from "@/lib/auth/client";
+import {
+  describePasswordRefusal,
+  newPasswordLengthError,
+  PASSWORD_TOO_SHORT_MESSAGE,
+} from "@/lib/password-messages";
 import { signUpSchema } from "@/lib/schemas/auth";
 
 const defaultSuccessMessage = "Check your email to verify your sender account.";
@@ -28,6 +34,10 @@ const SIGNUP_RULE_ERROR_CODES = new Set([
 ]);
 
 type SignupShellProps = {
+  /** False when password sign-in is turned off, so accounts come from SSO. */
+  passwordSignIn?: boolean;
+  /** Single sign-on, when the install has it (lib/auth/sso.ts). */
+  sso?: SsoOption | null;
   /** False when this install is not taking new accounts at all. */
   signupAvailable?: boolean;
   /** One sentence on who can create an account, or null when anyone can. */
@@ -74,9 +84,12 @@ type SignupFormCardProps = {
   onFullNameChange: ChangeEventHandler<HTMLInputElement>;
   onPasswordChange: ChangeEventHandler<HTMLInputElement>;
   onResendVerification?: () => void | Promise<void>;
+  onSsoError: (message: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
+  passwordSignIn: boolean;
   showSuccess: boolean;
   signupRule: string | null;
+  sso: SsoOption | null;
   successMessage: string | null;
   values: SignupFormValues;
 };
@@ -91,9 +104,12 @@ function SignupFormCard({
   onFullNameChange,
   onPasswordChange,
   onResendVerification,
+  onSsoError,
   onSubmit,
+  passwordSignIn,
   showSuccess,
   signupRule,
+  sso,
   successMessage,
   values,
 }: SignupFormCardProps) {
@@ -119,86 +135,97 @@ function SignupFormCard({
         ) : null}
 
         {showSuccess ? (
-          <div
-            aria-live="polite"
-            className="notice notice-success"
-          >
-            <p>
-              {successMessage ?? defaultSuccessMessage}
-            </p>
+          <div aria-live="polite" className="notice notice-success">
+            <p>{successMessage ?? defaultSuccessMessage}</p>
           </div>
         ) : null}
 
-        <form className="space-y-5" noValidate onSubmit={onSubmit}>
-          <FieldShell
-            autoComplete="name"
-            disabled={formLocked}
-            error={errors.fullName}
-            label="Full name"
-            name="signup-full-name"
-            onChange={onFullNameChange}
-            placeholder="Jane Smith"
-            readOnly={formLocked}
-            value={values.fullName}
+        {sso ? (
+          <SsoButton
+            onError={onSsoError}
+            sso={sso}
+            variant={passwordSignIn ? "secondary" : "primary"}
           />
-          <FieldShell
-            autoComplete="email"
-            disabled={formLocked}
-            error={errors.email}
-            label="Email"
-            name="signup-email"
-            onChange={onEmailChange}
-            placeholder="jane@acmecorp.com"
-            readOnly={formLocked}
-            type="email"
-            value={values.email}
-          />
-          <FieldShell
-            autoComplete="new-password"
-            disabled={formLocked}
-            error={errors.password}
-            helper="Must be at least 15 characters"
-            label="Password"
-            name="signup-password"
-            onChange={onPasswordChange}
-            placeholder="Enter a password"
-            readOnly={formLocked}
-            type="password"
-            value={values.password}
-          />
+        ) : null}
 
-          {showSuccess ? (
-            <div className="flex flex-col gap-3">
-              <ShellButton className="w-full" href="/login" variant="primary">
-                Go to log in
-              </ShellButton>
-              {onResendVerification ? (
-                <ShellButton
-                  className="w-full"
-                  disabled={formLocked}
-                  loading={isResendingVerification}
-                  onClick={onResendVerification}
-                  type="button"
-                  variant="secondary"
-                >
-                  {isResendingVerification
-                    ? "Sending..."
-                    : "Resend verification email"}
-                </ShellButton>
-              ) : null}
-            </div>
-          ) : (
-            <ShellButton
-              className="w-full"
+        {sso && passwordSignIn ? (
+          <p className="text-center text-xs font-semibold uppercase tracking-[0.12em] text-(--secondary)">
+            or
+          </p>
+        ) : null}
+
+        {passwordSignIn ? (
+          <form className="space-y-5" noValidate onSubmit={onSubmit}>
+            <FieldShell
+              autoComplete="name"
               disabled={formLocked}
-              loading={isSubmitting}
-              type="submit"
-              variant="primary"
-            >
-              {isSubmitting ? "Creating account..." : "Sign up"}
-            </ShellButton>
-          )}
-        </form>
+              error={errors.fullName}
+              label="Full name"
+              name="signup-full-name"
+              onChange={onFullNameChange}
+              placeholder="Jane Smith"
+              readOnly={formLocked}
+              value={values.fullName}
+            />
+            <FieldShell
+              autoComplete="email"
+              disabled={formLocked}
+              error={errors.email}
+              label="Email"
+              name="signup-email"
+              onChange={onEmailChange}
+              placeholder="jane@acmecorp.com"
+              readOnly={formLocked}
+              type="email"
+              value={values.email}
+            />
+            <FieldShell
+              autoComplete="new-password"
+              disabled={formLocked}
+              error={errors.password}
+              helper="Must be at least 15 characters"
+              label="Password"
+              name="signup-password"
+              onChange={onPasswordChange}
+              placeholder="Enter a password"
+              readOnly={formLocked}
+              type="password"
+              value={values.password}
+            />
+
+            {showSuccess ? (
+              <div className="flex flex-col gap-3">
+                <ShellButton className="w-full" href="/login" variant="primary">
+                  Go to log in
+                </ShellButton>
+                {onResendVerification ? (
+                  <ShellButton
+                    className="w-full"
+                    disabled={formLocked}
+                    loading={isResendingVerification}
+                    onClick={onResendVerification}
+                    type="button"
+                    variant="secondary"
+                  >
+                    {isResendingVerification
+                      ? "Sending..."
+                      : "Resend verification email"}
+                  </ShellButton>
+                ) : null}
+              </div>
+            ) : (
+              <ShellButton
+                className="w-full"
+                disabled={formLocked}
+                loading={isSubmitting}
+                type="submit"
+                variant="primary"
+              >
+                {isSubmitting ? "Creating account..." : "Sign up"}
+              </ShellButton>
+            )}
+          </form>
+        ) : null}
 
         <div className="border-t border-(--border) pt-5 text-sm text-(--secondary)">
           Already have an account?{" "}
@@ -215,14 +242,22 @@ function SignupFormCard({
 }
 
 export function SignupShell({
+  passwordSignIn = true,
   signupAvailable = true,
   signupRule = null,
+  sso = null,
 }: SignupShellProps) {
   if (!signupAvailable) {
     return <SignupClosedCard />;
   }
 
-  return <LiveSignupShell signupRule={signupRule} />;
+  return (
+    <LiveSignupShell
+      passwordSignIn={passwordSignIn || !sso}
+      signupRule={signupRule}
+      sso={sso}
+    />
+  );
 }
 
 function SignupClosedCard() {
@@ -235,8 +270,8 @@ function SignupClosedCard() {
             Sign-up is closed
           </h1>
           <p className="pt-1 text-sm leading-6 text-muted-foreground">
-            New accounts are not being accepted on this site. If you were sent
-            a document to sign, use the link in that email. You do not need an
+            New accounts are not being accepted on this site. If you were sent a
+            document to sign, use the link in that email. You do not need an
             account.
           </p>
         </div>
@@ -248,7 +283,15 @@ function SignupClosedCard() {
   );
 }
 
-function LiveSignupShell({ signupRule }: { signupRule: string | null }) {
+function LiveSignupShell({
+  passwordSignIn,
+  signupRule,
+  sso,
+}: {
+  passwordSignIn: boolean;
+  signupRule: string | null;
+  sso: SsoOption | null;
+}) {
   const [values, setValues] = useState<SignupFormValues>(
     createSignupFormValues(),
   );
@@ -342,7 +385,9 @@ function LiveSignupShell({ signupRule }: { signupRule: string | null }) {
         }
 
         if (field === "password") {
-          nextErrors.password = "Password must be at least 15 characters";
+          nextErrors.password =
+            newPasswordLengthError(trimmedValues.password) ??
+            PASSWORD_TOO_SHORT_MESSAGE;
         }
       }
 
@@ -382,13 +427,9 @@ function LiveSignupShell({ signupRule }: { signupRule: string | null }) {
         setErrors({
           email: "This email is already registered",
         });
-      } else if (normalizedErrorMessage.includes("password too short")) {
+      } else if (describePasswordRefusal(result.error)) {
         setErrors({
-          password: "Password must be at least 15 characters",
-        });
-      } else if (normalizedErrorMessage.includes("compromised")) {
-        setErrors({
-          password: "Choose a password that hasn't appeared in a breach",
+          password: describePasswordRefusal(result.error)!,
         });
       } else {
         setBannerMessage("Something went wrong. Please try again.");
@@ -415,9 +456,12 @@ function LiveSignupShell({ signupRule }: { signupRule: string | null }) {
       onFullNameChange={handleChange("fullName")}
       onPasswordChange={handleChange("password")}
       onResendVerification={handleResendVerification}
+      onSsoError={setBannerMessage}
       onSubmit={handleSubmit}
+      passwordSignIn={passwordSignIn}
       showSuccess={showSuccess}
       signupRule={signupRule}
+      sso={sso}
       successMessage={successMessage}
       values={values}
     />

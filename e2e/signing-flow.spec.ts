@@ -3,6 +3,7 @@ import pg from "pg";
 
 import { e2eDatabaseUrl, e2eSetupToken } from "../playwright.config";
 import { extractLink, extractLinks, waitForEmail } from "./support/outbox";
+import { totpCode } from "./support/totp";
 import { writeSamplePdf } from "./support/sample-pdf";
 
 const PASSWORD = "correct horse battery staple 42";
@@ -1212,5 +1213,318 @@ test("a signer signs with a qualified signature in their own name, through the s
         `Signed by ${signerName} with a qualified electronic signature through eID Easy`,
       ),
     ).toBeVisible();
+  });
+});
+
+test("a signer who declines is told the decline was recorded, not that the link expired", async ({
+  browser,
+  page,
+}, testInfo) => {
+  const runId = String(Date.now());
+  const signerEmail = `decliner+${runId}@example.com`;
+  const database = new pg.Client({ connectionString: e2eDatabaseUrl });
+  let adminEmail = "";
+
+  await database.connect();
+
+  try {
+    const admin = await database.query<{ email: string }>(
+      `select email from public."user" where role = 'admin' limit 1`,
+    );
+
+    adminEmail = admin.rows[0]?.email ?? "";
+  } finally {
+    await database.end();
+  }
+
+  expect(adminEmail).not.toBe("");
+
+  let envelopeId = "";
+
+  await test.step("the sender sends a document to one signer", async () => {
+    const pdfPath = await writeSamplePdf(testInfo.outputPath("terms.pdf"));
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(adminEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+
+    await page.goto("/envelopes/new");
+    await page.getByLabel("Envelope title").fill("Terms to decline");
+    await page.getByLabel("Upload PDF").setInputFiles(pdfPath);
+    await page.getByRole("button", { name: "Next ->" }).click();
+    await expect(page).toHaveURL(/\/envelopes\/[^/]+\/signers$/);
+    envelopeId = /\/envelopes\/([^/]+)\/signers$/.exec(page.url())?.[1] ?? "";
+
+    await page.getByLabel("Signer 1 name").fill("Dana Decliner");
+    await page.getByLabel("Signer 1 email").fill(signerEmail);
+    await page.getByRole("button", { name: "Next →" }).click();
+    await expect(page).toHaveURL(/\/prepare$/);
+
+    await page.getByRole("button", { exact: true, name: "Signature" }).click();
+
+    const placementTarget = page.getByLabel("Place Signature on page 1");
+    const box = await placementTarget.boundingBox();
+
+    await placementTarget.click({
+      position: { x: box!.width * 0.3, y: box!.height * 0.6 },
+    });
+    await expect(page.getByRole("status")).toHaveText("Saved");
+    await page.getByRole("button", { name: "Next →" }).click();
+    await expect(page).toHaveURL(/\/review$/);
+    await page.getByRole("button", { name: "Send envelope" }).click();
+
+    const confirmation = page.getByRole("dialog", {
+      name: "Send this envelope?",
+    });
+
+    await confirmation.getByRole("checkbox").check();
+    await confirmation.getByRole("button", { name: "Send now" }).click();
+    await expect(page).toHaveURL(new RegExp(`/envelopes/${envelopeId}$`));
+  });
+
+  await test.step("the signer declines and sees that it was recorded", async () => {
+    const invitation = await waitForEmail({
+      template: "signing_invitation",
+      to: signerEmail,
+    });
+    const signerContext = await browser.newContext({
+      viewport: { height: 900, width: 1440 },
+    });
+    const signerPage = await signerContext.newPage();
+
+    await signerPage.goto(extractLink(invitation.text, "/sign/"));
+
+    const consent = signerPage.getByRole("dialog", { name: "Before you sign" });
+
+    await consent
+      .getByRole("checkbox", {
+        name: "I agree to use electronic records and signatures",
+      })
+      .check();
+    await consent.getByRole("button", { name: "Agree and continue" }).click();
+    await signerPage
+      .getByRole("button", { exact: true, name: "Decline" })
+      .click();
+
+    const decline = signerPage.getByRole("dialog", {
+      name: "Decline to sign?",
+    });
+
+    await decline
+      .getByLabel("Reason (optional)")
+      .fill("Terms in section 2 are not what we agreed.");
+    await decline.getByRole("button", { name: "Decline to sign" }).click();
+
+    const declined = signerPage.getByRole("heading", {
+      name: "You declined to sign",
+    });
+
+    await expect(declined).toBeVisible();
+    // Focus moves to the outcome, so a screen reader reads it out.
+    await expect(declined).toBeFocused();
+    await expect(signerPage.getByText("This link has expired")).toHaveCount(0);
+    await expect(
+      signerPage.getByText(/Request a new signing link/),
+    ).toHaveCount(0);
+    await signerContext.close();
+  });
+
+  await test.step("the sender sees the decline and its reason", async () => {
+    await waitForEmail({ template: "decline_notification", to: adminEmail });
+    await page.goto(`/envelopes/${envelopeId}`);
+    await expect(
+      page.getByText(
+        "Decline reason: Terms in section 2 are not what we agreed.",
+      ),
+    ).toBeVisible();
+  });
+});
+
+test("two-step sign-in: an administrator sets it up and requires it of everyone", async ({
+  browser,
+  page,
+}) => {
+  const database = new pg.Client({ connectionString: e2eDatabaseUrl });
+  let adminEmail = "";
+  let memberEmail = "";
+
+  await database.connect();
+
+  try {
+    adminEmail =
+      (
+        await database.query<{ email: string }>(
+          `select email from public."user" where role = 'admin' order by "createdAt" limit 1`,
+        )
+      ).rows[0]?.email ?? "";
+    memberEmail =
+      (
+        await database.query<{ email: string }>(
+          `
+            select u.email from public."user" u
+            where u.role = 'user' and u."emailVerified"
+              and exists (
+                select 1 from public.account a
+                where a."userId" = u.id and a.password is not null
+              )
+            order by u."createdAt" limit 1
+          `,
+        )
+      ).rows[0]?.email ?? "";
+  } finally {
+    await database.end();
+  }
+
+  expect(adminEmail).not.toBe("");
+  expect(memberEmail).not.toBe("");
+
+  let key = "";
+  let backupCode = "";
+
+  await test.step("requiring it is refused until the administrator uses it", async () => {
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(adminEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await page.goto("/settings");
+    await page
+      .getByRole("button", { name: "Require two-step sign-in" })
+      .click();
+    await expect(
+      page.getByText(/Set up two-step sign-in for your own account first/),
+    ).toBeVisible();
+  });
+
+  await test.step("the administrator sets up an authenticator app", async () => {
+    await page.getByRole("button", { name: "Set up two-step sign-in" }).click();
+    await page.getByLabel("Your password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(
+      page.getByRole("img", { name: "QR code for your authenticator app" }),
+    ).toBeVisible();
+
+    key = (await page.getByTestId("totp-secret").textContent()) ?? "";
+    backupCode =
+      (await page
+        .getByRole("list", { name: "Backup codes" })
+        .getByRole("listitem")
+        .first()
+        .textContent()) ?? "";
+
+    expect(key.replace(/\s/g, "")).toMatch(/^[A-Z2-7]+$/);
+    expect(backupCode).not.toBe("");
+
+    await page.getByLabel("6-digit code").fill(totpCode(key));
+    await page
+      .getByRole("button", { name: "Turn on two-step sign-in" })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Make new backup codes" }),
+    ).toBeVisible();
+  });
+
+  await test.step("and requires it of everyone", async () => {
+    await page
+      .getByRole("button", { name: "Require two-step sign-in" })
+      .click();
+    await expect(page.getByText("Required for everyone")).toBeVisible();
+  });
+
+  await test.step("signing in now asks for the second step; a backup code works", async () => {
+    const context = await browser.newContext({
+      // Better Auth allows three sign-ins per address in ten seconds. Each
+      // browser here gets its own address so the steps do not race it.
+      extraHTTPHeaders: { "x-forwarded-for": "198.51.100.21" },
+    });
+    const adminPage = await context.newPage();
+
+    await adminPage.goto("/login");
+    await adminPage.getByLabel("Email").fill(adminEmail);
+    await adminPage.getByLabel("Password").fill(PASSWORD);
+    await adminPage.getByRole("button", { name: "Log in" }).click();
+    await expect(
+      adminPage.getByRole("heading", { name: "Enter your code" }),
+    ).toBeVisible();
+    await adminPage
+      .getByRole("button", { name: "Lost your phone? Use a backup code" })
+      .click();
+    await adminPage.getByLabel("Backup code").fill(backupCode);
+    await adminPage.getByRole("button", { name: "Continue" }).click();
+    await expect(adminPage).toHaveURL(/\/dashboard$/);
+    await context.close();
+  });
+
+  await test.step("someone without it is asked to set it up before anything else", async () => {
+    const context = await browser.newContext({
+      // Better Auth allows three sign-ins per address in ten seconds. Each
+      // browser here gets its own address so the steps do not race it.
+      extraHTTPHeaders: { "x-forwarded-for": "198.51.100.22" },
+    });
+    const memberPage = await context.newPage();
+
+    await memberPage.goto("/login");
+    await memberPage.getByLabel("Email").fill(memberEmail);
+    await memberPage.getByLabel("Password").fill(PASSWORD);
+    await memberPage.getByRole("button", { name: "Log in" }).click();
+    await expect(memberPage).toHaveURL(/\/two-step-setup$/);
+    await expect(
+      memberPage.getByRole("heading", { name: "Set up two-step sign-in" }),
+    ).toBeVisible();
+
+    // The API refuses too, not only the pages.
+    const envelopes = await memberPage.request.post("/api/envelopes", {
+      data: {},
+    });
+
+    expect(envelopes.status()).toBe(403);
+    await memberPage.goto("/dashboard");
+    await expect(memberPage).toHaveURL(/\/two-step-setup$/);
+    await context.close();
+  });
+
+  await test.step("the site audit trail has all of it", async () => {
+    const siteAudit = (await (
+      await page.request.get("/api/admin/audit")
+    ).json()) as {
+      chain: { ok: boolean };
+      events: { event: string; metadata: Record<string, unknown> | null }[];
+    };
+
+    expect(siteAudit.chain.ok).toBe(true);
+
+    const events = siteAudit.events.map((event) => event.event);
+
+    expect(events).toContain("two_factor_enabled");
+    expect(events).toContain("two_factor_requirement_changed");
+    expect(
+      siteAudit.events.some(
+        (event) =>
+          event.event === "sign_in_succeeded" &&
+          event.metadata?.secondStep === "backup_code",
+      ),
+    ).toBe(true);
+  });
+
+  await test.step("session limits are saved and recorded", async () => {
+    await page
+      .getByLabel("Sign out after no use for")
+      .selectOption({ label: "8 hours" });
+    await page.getByRole("button", { name: "Save session limits" }).click();
+    await expect(page.getByText("Session limits saved.")).toBeVisible();
+    // Still signed in: the page's own session is well within the limit.
+    await page.reload();
+    await expect(page.getByLabel("Sign out after no use for")).toHaveValue(
+      "480",
+    );
+  });
+
+  await test.step("the requirement can be lifted again", async () => {
+    await page
+      .getByRole("button", { name: "Stop requiring two-step sign-in" })
+      .click();
+    await expect(page.getByText("Optional", { exact: true })).toBeVisible();
   });
 });

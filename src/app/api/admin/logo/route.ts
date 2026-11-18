@@ -9,6 +9,7 @@ import {
 } from "@/lib/brand-logo";
 import { buildBrandLogoPath } from "@/lib/branding";
 import { logRouteError } from "@/lib/security/logging";
+import { recordAdminActivity } from "@/lib/services/admin-activity";
 import {
   applyRateLimit,
   buildRateLimitKey,
@@ -79,6 +80,13 @@ export async function PUT(request: Request) {
 
     const version = await saveBrandLogo(body);
 
+    await recordAdminActivity({
+      event: "logo_changed",
+      metadata: { action: "replaced", version },
+      request,
+      user: session.user,
+    });
+
     return NextResponse.json(
       { logoUrl: buildBrandLogoPath(version) },
       { headers: privateNoStore },
@@ -115,6 +123,12 @@ export async function DELETE(request: Request) {
 
   try {
     await removeBrandLogo();
+    await recordAdminActivity({
+      event: "logo_changed",
+      metadata: { action: "removed" },
+      request,
+      user: session.user,
+    });
 
     return NextResponse.json({ logoUrl: null }, { headers: privateNoStore });
   } catch (error) {

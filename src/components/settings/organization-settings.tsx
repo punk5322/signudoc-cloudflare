@@ -7,6 +7,7 @@ import { FieldShell, ShellButton } from "@/components/shared/form-shell";
 import { BrandingPanel } from "@/components/settings/branding-panel";
 import { Part11Panel } from "@/components/settings/part11-panel";
 import { PeoplePanel } from "@/components/settings/people-panel";
+import { SecurityPanel } from "@/components/settings/security-panel";
 import { SignerDataPanel } from "@/components/settings/signer-data-panel";
 import type { EmailDnsRecord, EmailStatus } from "@/lib/email-status";
 import type {
@@ -399,6 +400,14 @@ export function OrganizationSettings({
         {/* The hosted service's accounts are strangers to each other, not
             one organization, so it has no list of them here. */}
         {!values.hosted ? <PeoplePanel part11Mode={values.part11Mode} /> : null}
+
+        {!values.hosted ? (
+          <SecurityPanel
+            initialRequireTwoFactor={values.requireTwoFactor}
+            initialSessionIdleMinutes={values.sessionIdleMinutes}
+            initialSessionMaxHours={values.sessionMaxHours}
+          />
+        ) : null}
 
         {!values.hosted ? (
           <Part11Panel initialEnabled={values.part11Mode} />

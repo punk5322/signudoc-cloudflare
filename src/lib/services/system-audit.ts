@@ -1,11 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 
 import {
+  afterCommit,
   type DbExecutor,
   getDb,
   queryMany,
   withTransaction,
 } from "../db/connection.ts";
+import { logAuditRecord } from "../security/logging.ts";
 import { canonicalJson } from "../utils/canonical-json.ts";
 
 // The install's own audit trail: changes that are not about one envelope,
@@ -16,6 +18,8 @@ import { canonicalJson } from "../utils/canonical-json.ts";
 // changed, removed or reordered row shows.
 
 export const systemAuditEventTypes = [
+  "account_closure_requested",
+  "account_deleted",
   "settings_changed",
   "part11_mode_changed",
   "role_changed",
@@ -24,6 +28,20 @@ export const systemAuditEventTypes = [
   "signing_locked",
   "signing_unlocked",
   "reauthentication_failed",
+  "sign_in_succeeded",
+  "sign_in_failed",
+  "sign_in_locked",
+  "signed_out",
+  "sessions_revoked",
+  "password_changed",
+  "password_reset",
+  "two_factor_enabled",
+  "two_factor_disabled",
+  "two_factor_backup_codes_regenerated",
+  "two_factor_reset",
+  "two_factor_requirement_changed",
+  "logo_changed",
+  "email_domain_changed",
 ] as const;
 
 export type SystemAuditEventType = (typeof systemAuditEventTypes)[number];
@@ -105,6 +123,7 @@ async function insertChained(
     userAgent: input.userAgent ?? null,
   };
   const previousHash = previousRow?.rowHash ?? null;
+  const rowHash = computeSystemAuditRowHash(previousHash, fields);
 
   await database.query(
     `
@@ -125,9 +144,18 @@ async function insertChained(
       fields.metadata,
       fields.createdAt,
       previousHash,
-      computeSystemAuditRowHash(previousHash, fields),
+      rowHash,
     ],
   );
+
+  afterCommit(database, () => {
+    logAuditRecord({
+      ...fields,
+      actorType: "user",
+      rowHash,
+      trail: "site",
+    });
+  });
 
   return fields;
 }

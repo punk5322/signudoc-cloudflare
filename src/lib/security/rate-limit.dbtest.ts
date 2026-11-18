@@ -5,7 +5,12 @@ import { after, before, test } from "node:test";
 import type pg from "pg";
 
 import { openTestDatabase } from "../db/test-database.ts";
-import { consumeRateLimit, deleteExpiredRateLimits } from "./rate-limit.ts";
+import {
+  clearRateLimit,
+  consumeRateLimit,
+  deleteExpiredRateLimits,
+  peekRateLimit,
+} from "./rate-limit.ts";
 
 // The rate limit statement against a real Postgres. Run with
 // `npm run test:db`.
@@ -43,14 +48,35 @@ test("requests up to the limit pass, the next one waits, and the count starts ov
   const at = (offset: number) =>
     consumeRateLimit({ ...input, now: START + offset }, { database });
 
-  assert.deepEqual(await at(0), { allowed: true, retryAfterSeconds: 60 });
-  assert.deepEqual(await at(1000), { allowed: true, retryAfterSeconds: 59 });
-  assert.deepEqual(await at(15_000), { allowed: false, retryAfterSeconds: 45 });
+  assert.deepEqual(await at(0), {
+    allowed: true,
+    count: 1,
+    retryAfterSeconds: 60,
+  });
+  assert.deepEqual(await at(1000), {
+    allowed: true,
+    count: 2,
+    retryAfterSeconds: 59,
+  });
+  assert.deepEqual(await at(15_000), {
+    allowed: false,
+    count: 3,
+    retryAfterSeconds: 45,
+  });
   // Trying again while blocked does not push the window back.
-  assert.deepEqual(await at(59_000), { allowed: false, retryAfterSeconds: 1 });
-  assert.deepEqual(await at(MINUTE), { allowed: true, retryAfterSeconds: 60 });
+  assert.deepEqual(await at(59_000), {
+    allowed: false,
+    count: 4,
+    retryAfterSeconds: 1,
+  });
+  assert.deepEqual(await at(MINUTE), {
+    allowed: true,
+    count: 1,
+    retryAfterSeconds: 60,
+  });
   assert.deepEqual(await at(MINUTE + 1), {
     allowed: true,
+    count: 2,
     retryAfterSeconds: 60,
   });
   assert.equal((await at(MINUTE + 2)).allowed, false);
@@ -139,5 +165,42 @@ test("finished windows are cleared and live ones are kept", async () => {
   assert.deepEqual(
     remaining.rows.map((row) => row.key),
     [hash(live)],
+  );
+});
+
+test("peeking counts nothing, and clearing starts the count over", async () => {
+  const key = uniqueKey("peek");
+  const input = { key, limit: 2, windowMs: MINUTE };
+
+  assert.deepEqual(
+    await peekRateLimit({ ...input, now: START }, { database }),
+    {
+      allowed: true,
+      count: 0,
+      retryAfterSeconds: 1,
+    },
+  );
+
+  await consumeRateLimit({ ...input, now: START }, { database });
+  await consumeRateLimit({ ...input, now: START }, { database });
+
+  const used = await peekRateLimit(
+    { ...input, now: START + 10_000 },
+    { database },
+  );
+
+  assert.deepEqual(used, { allowed: false, count: 2, retryAfterSeconds: 50 });
+  assert.equal(
+    (await peekRateLimit({ ...input, now: START + MINUTE }, { database }))
+      .allowed,
+    true,
+  );
+
+  await clearRateLimit(key, { database });
+
+  assert.equal(
+    (await consumeRateLimit({ ...input, now: START + 10_000 }, { database }))
+      .count,
+    1,
   );
 });

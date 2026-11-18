@@ -169,6 +169,14 @@ test("an envelope completed while its sender's account is being deleted goes to 
   assert.ok(!summary.accountPurgeFailures.includes(leaver));
   assert.equal(await accountExists(leaver), false);
 
+  // The deletion is in the install's audit trail.
+  const deleted = await database.query<{ target_user_id: string }>(
+    `select target_user_id from system_audit_events where event = 'account_deleted' and target_user_id = $1`,
+    [leaver],
+  );
+
+  assert.equal(deleted.rows.length, 1);
+
   // The signed record outlives the account, with its document.
   const kept = await envelopeRow(envelope.id);
 

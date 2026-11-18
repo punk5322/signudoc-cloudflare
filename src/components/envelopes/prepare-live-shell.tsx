@@ -9,6 +9,7 @@ import {
   SquareCheckIcon,
   SquareChevronDownIcon,
   TypeIcon,
+  UserRoundIcon,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -172,6 +173,15 @@ const fieldTools: readonly FieldTool[] = [
     type: "date",
   },
   {
+    defaultHeight: 0.045,
+    defaultWidth: 0.2,
+    label: "Name",
+    minHeight: 0.0045,
+    minWidth: 0.006,
+    placeholderLabel: "Name",
+    type: "name",
+  },
+  {
     defaultHeight: 0.055,
     defaultWidth: 0.18,
     label: "Text",
@@ -218,8 +228,8 @@ const fieldTools: readonly FieldTool[] = [
   },
 ] as const;
 
-// Fields the sender may leave optional. A signature, initials and the date
-// are always needed.
+// Fields the sender may leave optional. A signature, initials, the date and
+// the name are always needed.
 function canBeOptional(type: PrepareFieldType) {
   return (
     type === "text" ||
@@ -1179,6 +1189,7 @@ const fieldToolIcons: Record<PrepareFieldType, LucideIcon> = {
   date: CalendarIcon,
   dropdown: SquareChevronDownIcon,
   initials: CaseSensitiveIcon,
+  name: UserRoundIcon,
   number: HashIcon,
   radio: CircleDotIcon,
   signature: SignatureIcon,

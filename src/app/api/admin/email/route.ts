@@ -8,6 +8,7 @@ import {
   recheckEmailDomain,
 } from "@/lib/email-status";
 import { sendTestEmail } from "@/lib/email-test";
+import { recordAdminActivity } from "@/lib/services/admin-activity";
 import { logRouteError } from "@/lib/security/logging";
 import {
   applyRateLimit,
@@ -93,7 +94,16 @@ export async function POST(request: Request) {
 
     const status =
       parsed.data.action === "add_domain"
-        ? await addEmailDomain()
+        ? await addEmailDomain({
+            // Only a domain Resend actually created is a change to record.
+            onDomainCreated: (domain) =>
+              recordAdminActivity({
+                event: "email_domain_changed",
+                metadata: { action: "added", domain },
+                request,
+                user: session.user,
+              }),
+          })
         : await recheckEmailDomain();
 
     return NextResponse.json({ status });

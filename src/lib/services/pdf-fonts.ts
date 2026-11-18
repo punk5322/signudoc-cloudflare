@@ -270,6 +270,85 @@ export function toDrawableText(value: string): string {
 /** Drawn in place of a character that none of the fonts has. */
 const REPLACEMENT_CHARACTER = 0xfffd;
 
+type LaidOutGlyph = {
+  advanceWidth: number;
+  codePoints: number[];
+  id: number;
+};
+
+/** The parts of pdf-lib 1.17's CustomFontEmbedder this file reaches into. */
+type CustomFontEmbedderInternals = {
+  encodeText(text: string): unknown;
+  font: {
+    layout(
+      text: string,
+      features?: unknown,
+    ): { glyphs: readonly LaidOutGlyph[] };
+  };
+  fontFeatures?: unknown;
+  glyphCache: { access(): LaidOutGlyph[] };
+};
+
+/**
+ * Makes the font's width table and ToUnicode map cover every glyph drawn
+ * with it, not only the one glyph per character pdf-lib lists.
+ *
+ * pdf-lib draws the glyphs fontkit's layout picks, ligatures and
+ * contextual alternates included, but it builds the font's /W widths and
+ * ToUnicode map from one glyph per character in the font's character set.
+ * A substituted glyph (Great Vibes draws "Pr", "or", "en" and "th" as one
+ * glyph each) was then missing from both: readers fell back to a width of
+ * 1000, which left a gap inside the name (issue #59), and had no text for
+ * it, so copying or searching the signature lost letters (issue #58).
+ * Every glyph laid out here is added to the list both are built from, with
+ * the characters fontkit says it stands for. The list is read when the
+ * document is saved, after everything has been drawn.
+ */
+export function includeLaidOutGlyphs(font: PDFFont): PDFFont {
+  const embedder = (
+    font as unknown as { embedder?: CustomFontEmbedderInternals }
+  ).embedder;
+
+  if (
+    !embedder ||
+    typeof embedder.encodeText !== "function" ||
+    typeof embedder.font?.layout !== "function" ||
+    typeof embedder.glyphCache?.access !== "function"
+  ) {
+    return font;
+  }
+
+  const laidOut = new Map<number, LaidOutGlyph>();
+  const encodeText = embedder.encodeText.bind(embedder);
+  const listed = embedder.glyphCache;
+
+  embedder.encodeText = (text: string) => {
+    for (const glyph of embedder.font.layout(text, embedder.fontFeatures)
+      .glyphs) {
+      if (glyph.codePoints.length > 0) {
+        laidOut.set(glyph.id, glyph);
+      }
+    }
+
+    return encodeText(text);
+  };
+  embedder.glyphCache = {
+    access() {
+      const glyphs = new Map(listed.access().map((glyph) => [glyph.id, glyph]));
+
+      for (const [id, glyph] of laidOut) {
+        if (!glyphs.has(id)) {
+          glyphs.set(id, glyph);
+        }
+      }
+
+      return [...glyphs.values()].sort((a, b) => a.id - b.id);
+    },
+  };
+
+  return font;
+}
+
 type FaceFont = {
   characters: ReadonlySet<number>;
   font: PDFFont;
@@ -475,14 +554,16 @@ export async function embedTextFaces(
     if (whole || !subset) {
       return {
         characters: loaded.characters,
-        font: await pdfDocument.embedFont(loaded.bytes),
+        font: includeLaidOutGlyphs(await pdfDocument.embedFont(loaded.bytes)),
       };
     }
 
     try {
       return {
         characters: new Set(wanted),
-        font: await pdfDocument.embedFont(subset(loaded.bytes, wanted)),
+        font: includeLaidOutGlyphs(
+          await pdfDocument.embedFont(subset(loaded.bytes, wanted)),
+        ),
       };
     } catch (error) {
       console.error("A font could not be subset for a PDF:", error);

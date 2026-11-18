@@ -52,6 +52,7 @@ type ReviewFieldSummaryLabel =
   | "Checkbox"
   | "Date"
   | "Initials"
+  | "Name"
   | "Signature"
   | "Text";
 
