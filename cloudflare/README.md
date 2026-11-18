@@ -53,6 +53,7 @@ Every variable and secret on the Worker reaches the app as an environment variab
 | `RETENTION_JOB_SECRET` | Closes the daily cleanup route to everyone but the Worker.                                                                                                                    |
 | `GOOGLE_CLIENT_ID`     | The OAuth client for filing finished envelopes in Google Drive (Settings, Integrations). Unset, that section is off. See [webhooks and Drive](../docs/webhooks-and-drive.md). |
 | `GOOGLE_CLIENT_SECRET` | That OAuth client's secret. Set it with `npx wrangler secret put`.                                                                                                            |
+| `ANTHROPIC_API_KEY`    | Turns on "Place fields with AI" when preparing an envelope. The draft's PDF is sent to Anthropic's API. Unset, the button is disabled.   |
 
 ### A domain of your own
 

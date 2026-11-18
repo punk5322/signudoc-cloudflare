@@ -6,6 +6,7 @@ import {
   CircleDotIcon,
   HashIcon,
   SignatureIcon,
+  SparklesIcon,
   SquareCheckIcon,
   SquareChevronDownIcon,
   TypeIcon,
@@ -69,6 +70,7 @@ import { getSignerPalette } from "./signer-palette";
 type PrepareFieldType = FieldPlacement["type"];
 
 type PrepareLiveShellProps = {
+  aiFieldsEnabled?: boolean;
   envelopeId: string;
   initialState?: "error";
   record?: PrepareEnvelopeData;
@@ -389,6 +391,7 @@ async function parseJsonResponse<T>(
 }
 
 export function PrepareLiveShell({
+  aiFieldsEnabled = false,
   envelopeId,
   initialState,
   record,
@@ -397,7 +400,13 @@ export function PrepareLiveShell({
     return <PrepareLiveShellError envelopeId={envelopeId} />;
   }
 
-  return <PrepareLiveShellContent envelopeId={envelopeId} record={record} />;
+  return (
+    <PrepareLiveShellContent
+      aiFieldsEnabled={aiFieldsEnabled}
+      envelopeId={envelopeId}
+      record={record}
+    />
+  );
 }
 
 function PrepareLiveShellError({ envelopeId }: { envelopeId: string }) {
@@ -435,9 +444,11 @@ function PrepareLiveShellError({ envelopeId }: { envelopeId: string }) {
 }
 
 function PrepareLiveShellContent({
+  aiFieldsEnabled,
   envelopeId,
   record,
 }: {
+  aiFieldsEnabled: boolean;
   envelopeId: string;
   record: PrepareEnvelopeData;
 }) {
@@ -454,6 +465,8 @@ function PrepareLiveShellContent({
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isContinuing, setIsContinuing] = useState(false);
+  const [isPlacingWithAi, setIsPlacingWithAi] = useState(false);
+  const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [isFieldInteracting, setIsFieldInteracting] = useState(false);
   const [isDocumentPanning, setIsDocumentPanning] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(DEFAULT_DOCUMENT_ZOOM_LEVEL);
@@ -696,6 +709,62 @@ function PrepareLiveShellContent({
     };
   }, [fields, isFieldInteracting]);
 
+  // Adds Claude's suggestions next to the fields already placed. They save
+  // like any other field and nothing is sent; on an error nothing changes.
+  async function handlePlaceWithAi() {
+    if (isPlacingWithAi) {
+      return;
+    }
+
+    setIsPlacingWithAi(true);
+    setAiMessage(null);
+
+    try {
+      const response = await fetch(`/api/envelopes/${envelopeId}/ai-fields`, {
+        method: "POST",
+      });
+      const payload = await parseJsonResponse<{
+        fields: Omit<PrepareField, "id">[];
+      }>(response);
+      const suggestions = payload.data?.fields ?? [];
+
+      if (payload.error) {
+        setAiMessage(payload.error);
+        return;
+      }
+
+      if (suggestions.length === 0) {
+        setAiMessage("No places to sign were found. Place fields by hand.");
+        return;
+      }
+
+      setFields((currentFields) => [
+        ...currentFields,
+        ...suggestions.map((field) => ({ ...field, id: newLocalId() })),
+      ]);
+      setSelectedFieldId(null);
+      setArmedTool(null);
+      setActivePage(suggestions[0]?.page ?? activePage);
+      setIsMobileToolsOpen(false);
+      setAiMessage(
+        `Added ${String(suggestions.length)} suggested ${suggestions.length === 1 ? "field" : "fields"}. Check each one before sending.`,
+      );
+    } catch {
+      setAiMessage(genericSubmitError);
+    } finally {
+      setIsPlacingWithAi(false);
+    }
+  }
+
+  const aiPlacement = (
+    <AiPlacementButton
+      enabled={aiFieldsEnabled}
+      isPlacing={isPlacingWithAi}
+      message={aiMessage}
+      onPlace={() => void handlePlaceWithAi()}
+    />
+  );
+
   async function handleContinue() {
     if (!canContinue || isContinuing) {
       return;
@@ -789,6 +858,7 @@ function PrepareLiveShellContent({
                   />
                 ))}
               </div>
+              {aiPlacement}
             </section>
 
             <section className="panel space-y-3 rounded-[1.25rem] p-4">
@@ -1176,6 +1246,7 @@ function PrepareLiveShellContent({
                   />
                 ))}
               </div>
+              {aiPlacement}
             </div>
           </div>
         </div>
@@ -1195,6 +1266,40 @@ const fieldToolIcons: Record<PrepareFieldType, LucideIcon> = {
   signature: SignatureIcon,
   text: TypeIcon,
 };
+
+function AiPlacementButton({
+  enabled,
+  isPlacing,
+  message,
+  onPlace,
+}: {
+  enabled: boolean;
+  isPlacing: boolean;
+  message: string | null;
+  onPlace: () => void;
+}) {
+  return (
+    <div className="grid gap-2 border-t border-(--surface-strong) pt-3">
+      <Button
+        disabled={!enabled || isPlacing}
+        onClick={onPlace}
+        type="button"
+        variant="secondary"
+      >
+        <SparklesIcon aria-hidden className="size-4" />
+        {isPlacing ? "Placing fields…" : "Place fields with AI"}
+      </Button>
+      {enabled ? null : (
+        <p className="px-1 text-xs text-(--tertiary)">
+          An admin must set ANTHROPIC_API_KEY to turn this on.
+        </p>
+      )}
+      <p aria-live="polite" className="px-1 text-xs text-(--secondary)">
+        {message}
+      </p>
+    </div>
+  );
+}
 
 function FieldToolButton({ isActive, onSelect, tool }: FieldToolButtonProps) {
   const Icon = fieldToolIcons[tool.type];
