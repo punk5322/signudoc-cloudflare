@@ -9,12 +9,17 @@
   "observability": { "enabled": true },
   // Served at <name>.<your subdomain>.workers.dev until a domain is added.
   "workers_dev": true,
-  "routes": [{ "pattern": "sign.arshshah.com", "custom_domain": true }],
+  "routes": [
+    { "pattern": "sign.arshshah.com", "custom_domain": true },
+    // Outranks the account's *.arshshah.com/* wildcard route, which otherwise wins over the custom domain.
+    { "pattern": "sign.arshshah.com/*", "zone_name": "arshshah.com" },
+  ],
   "preview_urls": false,
 
   // The app, built from the repository into a container image.
   "containers": [
     {
+      "name": "signudoc-signudocapp",
       "class_name": "SignuDocApp",
       "scheduling_policy": "durable_object",
       "images": {
