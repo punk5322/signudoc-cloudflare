@@ -3,12 +3,13 @@
 // This file is at the top of the repository because the "Deploy to
 // Cloudflare" button, and Cloudflare's own builds, look for it here.
 {
-  "name": "signudoc",
+  "name": "signudoc-cloudflare",
   "main": "cloudflare/worker.mjs",
   "compatibility_date": "2026-11-01",
   "observability": { "enabled": true },
   // Served at <name>.<your subdomain>.workers.dev until a domain is added.
   "workers_dev": true,
+  "routes": [{ "pattern": "sign.arshshah.com", "custom_domain": true }],
   "preview_urls": false,
 
   // The app, built from the repository into a container image.
