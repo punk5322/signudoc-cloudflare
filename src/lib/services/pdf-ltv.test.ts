@@ -205,7 +205,7 @@ test("a CA-issued seal gets its chain, OCSP answers and an archive timestamp (B-
         1,
         stdout,
       );
-      assert.match(stdout, /SignuDoc archive timestamp/);
+      assert.match(stdout, /Archive timestamp/);
 
       // OpenSSL checks the archive timestamp against the bytes it covers
       // and the test CA.

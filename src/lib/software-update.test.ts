@@ -190,5 +190,5 @@ test("failures are reported, not thrown, and retried sooner", async () => {
     fetchImpl: none.impl,
   });
 
-  assert.match(!missing.ok ? missing.error : "", /no published release/);
+  assert.match(!missing.ok ? missing.error : "", /No release has been published/);
 });

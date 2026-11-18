@@ -235,11 +235,8 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
         ).toHaveCount(0);
       }
 
-      // The product's own link goes to its repository. There is no site
-      // run by the project to send anyone to.
-      await expect(
-        footer.getByRole("link", { name: "Powered by SignuDoc" }),
-      ).toHaveAttribute("href", "https://github.com/NYLLON-SOFTWARE/SignuDoc");
+      // This fork shows no product link at all.
+      await expect(footer.getByText(/SignuDoc/)).toHaveCount(0);
     }
 
     // A signer with a question is sent to the organization's own address.
@@ -281,7 +278,7 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
 
     // Emails carry the organization's name, not the product's.
     expect(verificationEmail.text).toContain(
-      `Sent by ${ORGANIZATION_NAME} using SignuDoc.`,
+      `Sent by ${ORGANIZATION_NAME}.`,
     );
 
     await page.goto(

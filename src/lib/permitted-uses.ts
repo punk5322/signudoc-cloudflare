@@ -31,7 +31,7 @@ export const EU_LIMITS: string[] = [
 ];
 
 export const WHAT_IT_IS: UseSection = {
-  heading: "What Signudoc is",
+  heading: "What this service is",
   items: [
     "A tool for ordinary business agreements: sales and service contracts, NDAs, offer letters, purchase orders, consent and approval forms, and similar documents.",
     "In the US, signatures made here are electronic signatures under ESIGN and UETA (and New York's ESRA).",
@@ -40,7 +40,7 @@ export const WHAT_IT_IS: UseSection = {
 };
 
 export const WHAT_IT_IS_NOT: UseSection = {
-  heading: "What Signudoc is not",
+  heading: "What this service is not",
   items: [
     "Not an advanced (AdES) or qualified (QES) electronic signature under eIDAS as it comes. An install can add a signing provider, and then a sender can ask each signer to sign with an advanced or qualified signature in their own name through it; without one, the seal on finished PDFs is the install's own or, with a seal certificate the organization buys, an advanced electronic seal for the organization, not for the signers.",
     "Not a validated FDA 21 CFR Part 11 system as it comes. An administrator can turn on Part 11 mode (signers sign with their own confirmed accounts and password, and each signature shows its meaning), but your organization still has to validate the install, write and follow its own procedures, and certify its electronic signatures to the FDA.",

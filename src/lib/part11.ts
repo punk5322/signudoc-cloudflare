@@ -6,7 +6,7 @@ import {
   queryOne,
   withTransaction,
 } from "./db/connection.ts";
-import { SIGNUDOC_NAME } from "./branding.ts";
+import { NEUTRAL_PRODUCT_NAME } from "./branding.ts";
 import { createEmailService, type EmailService } from "./services/email.ts";
 import { recordSystemAuditEvent } from "./services/system-audit.ts";
 import { getBranding, getSettings } from "./settings.ts";
@@ -495,7 +495,7 @@ async function alertAdministrators(
     // The alert goes out even when the branding cannot be read.
     const productName = await getBranding()
       .then((branding) => branding.productName)
-      .catch(() => SIGNUDOC_NAME);
+      .catch(() => NEUTRAL_PRODUCT_NAME);
     const service = emailService ?? createEmailService();
     const textBody = [
       `${person.name} <${person.email}> gave the wrong password ${MAX_SIGNING_PASSWORD_ATTEMPTS} times in a row while signing on ${productName}.`,

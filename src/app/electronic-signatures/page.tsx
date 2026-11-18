@@ -36,7 +36,7 @@ export default async function ElectronicSignaturesPage() {
 
   return (
     <PublicDocumentShell
-      description={`${productName} uses Signudoc to collect electronic signatures. This page says which documents that is meant for, and which it is not.`}
+      description={`${productName} uses this service to collect electronic signatures. This page says which documents that is meant for, and which it is not.`}
       lastUpdated={PERMITTED_USE_VERSION}
       title="What this is for"
     >

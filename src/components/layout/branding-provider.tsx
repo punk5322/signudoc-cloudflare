@@ -3,13 +3,20 @@
 import { createContext, useContext, type ReactNode } from "react";
 
 import { buildBrandColorCss } from "@/lib/brand-color";
-import { HOSTED_BRANDING, type Branding } from "@/lib/branding";
+import {
+  HOSTED_BRANDING,
+  NEUTRAL_PRODUCT_NAME,
+  type Branding,
+} from "@/lib/branding";
 
 // What this install calls itself, handed down from the server layouts that
 // looked it up, and from PublicDocumentShell for the pages outside them. The
 // one page with neither (the landing page) only exists in hosted mode, which
 // is also the default here.
-const BrandingContext = createContext<Branding>(HOSTED_BRANDING);
+const BrandingContext = createContext<Branding>({
+  ...HOSTED_BRANDING,
+  productName: NEUTRAL_PRODUCT_NAME,
+});
 
 type BrandingProviderProps = {
   branding: Branding;

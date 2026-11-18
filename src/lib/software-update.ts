@@ -198,7 +198,7 @@ export function toReleaseInfo(payload: unknown): ReleaseInfo | null {
   const name =
     typeof record.name === "string" && record.name.trim()
       ? record.name.trim()
-      : `SignuDoc ${version}`;
+      : `Version ${version}`;
 
   return {
     name: name.slice(0, 200),
@@ -283,7 +283,7 @@ async function fetchLatest(
   }
 
   if (response.status === 404) {
-    return fail("SignuDoc has no published release yet.");
+    return fail("No release has been published yet.");
   }
 
   if (response.status === 403 || response.status === 429) {

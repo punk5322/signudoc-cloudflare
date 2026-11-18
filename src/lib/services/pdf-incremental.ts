@@ -576,7 +576,7 @@ export async function appendDocumentTimestamp(
   const fieldRef = allocate();
   const objects: UpdatedObject[] = [];
   // Field names must differ; the object number does.
-  const fieldName = `SignuDoc archive timestamp ${String(fieldRef.number)}`;
+  const fieldName = `Archive timestamp ${String(fieldRef.number)}`;
 
   objects.push({
     body: Buffer.from(

@@ -394,7 +394,7 @@ export async function saveSealedPdf(
   const signingTime = options.signingTime ?? new Date();
 
   pdflibAddPlaceholder({
-    appName: "SignuDoc",
+    appName: options.name,
     contactInfo: options.contactInfo ?? "",
     location: options.location ?? "",
     name: options.name,

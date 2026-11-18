@@ -360,8 +360,8 @@ function getEnvelopeStatusLabel(status: EnvelopeRecord["status"]): string {
 
 function getCertificateTitle(envelope: EnvelopeRecord): string {
   return envelope.status === "completed"
-    ? "SignuDoc Certificate of Completion"
-    : "SignuDoc Audit Certificate";
+    ? "Certificate of Completion"
+    : "Audit Certificate";
 }
 
 function getTerminalTimestampLabel(envelope: EnvelopeRecord): string {
@@ -1292,7 +1292,7 @@ export async function renderEnvelopeCertificatePdf(
     signers: input.signers,
   });
   pdfDocument.setTitle(`Audit certificate: ${input.envelope.title}`);
-  pdfDocument.setProducer("SignuDoc");
+  pdfDocument.setProducer("");
 
   return seal(pdfDocument, "certificate");
 }

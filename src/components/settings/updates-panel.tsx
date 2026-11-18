@@ -59,10 +59,10 @@ export function UpdatesPanel({
         <div className="space-y-2">
           <p className="section-eyebrow">Administrator</p>
           <h2 className="text-2xl font-extrabold tracking-[-0.03em] text-(--fg)">
-            SignuDoc
+            Software
           </h2>
           <p className="max-w-2xl text-sm leading-6 text-(--secondary)">
-            This site runs SignuDoc version{" "}
+            This site runs version{" "}
             <span
               className="font-bold text-(--fg)"
               data-testid="running-version"
@@ -108,7 +108,7 @@ export function UpdatesPanel({
             check.updateAvailable ? (
               <div className="space-y-4" role="status">
                 <p className="notice notice-accent">
-                  <strong>{check.latest.name}</strong> is out. This site runs{" "}
+                  <strong>Version {check.latest.version}</strong> is out. This site runs{" "}
                   {check.current}.
                 </p>
                 {check.latest.notes ? (
@@ -214,7 +214,7 @@ function HowToUpdate({ status }: { status: UpdateStatus }) {
               >
                 {repository.owner}/{repository.slug}
               </a>
-              , open the Update SignuDoc workflow and press{" "}
+              , open the update workflow and press{" "}
               <strong className="text-(--fg)">Run workflow</strong>. It also
               runs by itself once a week.
             </li>

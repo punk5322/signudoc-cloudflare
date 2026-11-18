@@ -79,10 +79,10 @@ test("a neutral install goes by the organization's name and links", () => {
   });
 });
 
-test("a neutral install with no name yet goes by SignuDoc and has no legal links", () => {
+test("a neutral install with no name yet goes by a neutral name and has no legal links", () => {
   const branding = buildBranding(resolveSettings(null, {}));
 
-  assert.equal(branding.productName, "SignuDoc");
+  assert.equal(branding.productName, "E-signatures");
   assert.equal(branding.organizationName, null);
   assert.equal(branding.termsUrl, null);
   assert.equal(branding.privacyUrl, null);

@@ -1,4 +1,4 @@
-import { SIGNUDOC_NAME } from "../branding.ts";
+import { NEUTRAL_PRODUCT_NAME, SIGNUDOC_NAME } from "../branding.ts";
 
 // Which addresses email is sent from and replied to.
 //
@@ -56,7 +56,7 @@ function cleanDisplayName(value: string | null): string {
     .trim()
     .slice(0, 80);
 
-  return cleaned || SIGNUDOC_NAME;
+  return cleaned || NEUTRAL_PRODUCT_NAME;
 }
 
 function hasDisplayName(value: string): boolean {

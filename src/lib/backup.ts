@@ -559,7 +559,7 @@ export async function* readDatabaseBackup(
         first = false;
 
         if (parsed.format !== BACKUP_FORMAT) {
-          throw new Error("This is not a SignuDoc database backup.");
+          throw new Error("This is not a database backup from this software.");
         }
 
         yield {
@@ -665,7 +665,7 @@ export async function restoreDatabase({
 
         if (missing.length > 0) {
           throw new RestoreError(
-            `The backup is from a newer version of SignuDoc. Update this copy first; it lacks ${missing.join(", ")}.`,
+            `The backup is from a newer version of this software. Update this copy first; it lacks ${missing.join(", ")}.`,
           );
         }
 

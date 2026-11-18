@@ -1,4 +1,4 @@
-import { SIGNUDOC_NAME, type Branding } from "../branding.ts";
+import type { Branding } from "../branding.ts";
 import { getEnv, type EnvSource } from "../utils/env.ts";
 import { escapeHtml } from "../utils/html.ts";
 import { requireConfigValue } from "./service-config.ts";
@@ -67,7 +67,7 @@ function buildLogoHeader(branding: Branding, env: EnvSource): string {
  * Appends the footer every email to a person carries: the install's terms,
  * privacy and contact links, where it has them. On a neutral install the
  * footer also names the organization's support address and says the message
- * was sent with SignuDoc, and the organization's logo, when it has one,
+ * was sent by the organization, and the organization's logo, when it has one,
  * goes at the top.
  */
 export function withUserEmailLegalFooter(
@@ -93,12 +93,12 @@ export function withUserEmailLegalFooter(
       );
     }
 
-    const sentBy = branding.organizationName
-      ? `Sent by ${branding.organizationName} using ${SIGNUDOC_NAME}.`
-      : `Sent using ${SIGNUDOC_NAME}.`;
+    if (branding.organizationName) {
+      const sentBy = `Sent by ${branding.organizationName}.`;
 
-    textLines.push("", sentBy);
-    htmlLines.push(escapeHtml(sentBy));
+      textLines.push("", sentBy);
+      htmlLines.push(escapeHtml(sentBy));
+    }
   }
 
   if (htmlLines.length === 0) {
