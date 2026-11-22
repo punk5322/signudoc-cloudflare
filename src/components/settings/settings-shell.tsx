@@ -613,6 +613,7 @@ export function SettingsShell({
                   <FieldShell
                     disabled={isBusy}
                     error={passwordErrors.currentPassword}
+                    autoComplete="current-password"
                     label="Current password"
                     name="currentPassword"
                     onChange={handlePasswordChange("currentPassword")}
@@ -624,6 +625,7 @@ export function SettingsShell({
                   <FieldShell
                     disabled={isBusy}
                     error={passwordErrors.newPassword}
+                    autoComplete="new-password"
                     helper="Must be at least 15 characters"
                     label="New password"
                     name="newPassword"
